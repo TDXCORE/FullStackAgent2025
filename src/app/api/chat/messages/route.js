@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseClient';
 
+export const dynamic = 'force-static';
+
 export async function GET(request) {
   try {
     // Get conversation_id from query params
