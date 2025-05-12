@@ -1,0 +1,13 @@
+@echo off
+echo Ejecutando script para corregir usuarios duplicados...
+
+:: Establecer variables de entorno
+set NEXT_PUBLIC_SUPABASE_URL=https://lfdfpqedfxlqnsqewacn.supabase.co
+set NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmZGZwcWVkZnhscW5zcWV3YWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ5OTU4MTMsImV4cCI6MjA2MDU3MTgxM30.1tveG2ta6d6OIR0-bsnOUY4r7dHgHsYO7JOUd9D-Q3g
+set SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmZGZwcWVkZnhscW5zcWV3YWNuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDk5NTgxMywiZXhwIjoyMDYwNTcxODEzfQ.AeWZc8HUi7sbFc42uMpbREnfyUnBlhAy0-jisDyw0iU
+
+:: Ejecutar el script
+python fix_duplicate_users.py
+
+echo Script completado.
+pause

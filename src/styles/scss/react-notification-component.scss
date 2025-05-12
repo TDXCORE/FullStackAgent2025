@@ -1,0 +1,148 @@
+.rnc__notification {
+    width: auto !important;
+    color: $black_2;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+
+.rnc__notification-item {
+    box-shadow: none;
+    // border-left: none;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+}
+
+.rnc__notification-title {
+    color: inherit;
+}
+
+.rnc__notification-message {
+    font-family: var(--bs-body-font-family);
+    font-size: var(--bs-body-font-size);
+    color: inherit;
+}
+
+
+
+// .rnc__notification-close-mark {
+//     padding: 0.9rem 1rem;
+//     color: $black_2;
+
+//     &:before {
+//         position: relative;
+//         top: -2px;
+//     }
+
+//     &:hover {
+//         opacity: 1;
+//         color: inherit;
+//     }
+// }
+
+
+.rnc__notification-item--default {
+    color: $primary;
+    background: $primary_light_5;
+    @include border-opacity($primary_light_4, 0.3);
+
+    .rnc__notification-timer {
+        background-color: $default_timer;
+    }
+
+    .rnc__notification-timer-filler {
+        background-color: $default_timer_filler;
+    }
+
+    // .rnc__notification-close-mark {
+    //     background-color: $default;
+    // }
+}
+
+.rnc__notification-item--warning {
+    color: $warning_dark_2;
+    background: $warning_light_5;
+    @include border-opacity($warning_light_4, 0.3);
+
+    .rnc__notification-title {
+        color: $warning_dark_2;
+    }
+
+    .rnc__notification-timer {
+        background-color: $warning_timer;
+    }
+
+    .rnc__notification-timer-filler {
+        background-color: $warning_timer_filler;
+    }
+
+    // .rnc__notification-close-mark {
+    //     background-color: $warning;
+    // }
+}
+
+.rnc__notification-item--danger {
+    color: $danger;
+    background: $danger_light_5;
+    @include border-opacity($danger_light_4, 0.3);
+
+    .rnc__notification-title {
+        color: $danger;
+    }
+
+    .rnc__notification-timer {
+        background-color: $danger_timer;
+    }
+
+    .rnc__notification-timer-filler {
+        background-color: $danger_timer_filler;
+    }
+
+    // .rnc__notification-close-mark {
+    //     background-color: $danger;
+    // }
+}
+
+.rnc__notification-item--info {
+    color: $info_dark_1;
+    background: $info_light_5;
+    @include border-opacity($info_light_4, 0.3);
+
+    .rnc__notification-title {
+        color: $info_dark_1;
+    }
+
+    .rnc__notification-timer {
+        background-color: $info_timer;
+    }
+
+    .rnc__notification-timer-filler {
+        background-color: $info_timer_filler;
+    }
+
+    // .rnc__notification-close-mark {
+    //     background-color: $info_dark_1;
+    // }
+}
+
+.rnc__notification-item--success {
+    color: $success;
+    background: $success_light_5;
+    @include border-opacity($success_light_4, 0.3);
+
+    .rnc__notification-title {
+        color: $success_dark_1;
+    }
+
+    .rnc__notification-timer {
+        background-color: $success_timer;
+    }
+
+    .rnc__notification-timer-filler {
+        background-color: $success_timer_filler;
+    }
+
+    // .rnc__notification-close-mark {
+    //     background-color: $success_dark_1;
+    // }
+}
