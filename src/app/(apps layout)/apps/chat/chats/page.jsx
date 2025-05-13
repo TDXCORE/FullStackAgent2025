@@ -10,6 +10,7 @@ import ChatHeader from '../ChatHeader';
 import { useWindowWidth } from '@react-hook/window-size';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
 import { createConversation, getConversations } from '@/services/chatService';
+import DebugTools from '../DebugTools';
 
 const Chats = () => {
     const { states, dispatch } = useGlobalStateContext();
@@ -79,22 +80,24 @@ const Chats = () => {
     }, [states.chatState.userId, dispatch]);
 
     return (
-        <div className="hk-pg-body py-0">
-            <div className={classNames("chatapp-wrap", { "chatapp-info-active": showInfo }, { "chatapp-slide": states.chatState.startChat })}>  {/* In class { "chatapp-slide": startChating } */}
-                <div className="chatapp-content">
-                <ContactList invitePeople={() => setInvitePeople(!invitePeople)} />
-                    <div className="chatapp-single-chat">
-                        <ChatHeader infoState={showInfo} infoToggle={() => setShowInfo(!showInfo)} invitePeople={() => setInvitePeople(!invitePeople)} />
-                        <ChatBody />
-                        <ChatFooter />
-                        <ChatInfo infoToggle={() => setShowInfo(!showInfo)} />
+        <>
+            <div className="hk-pg-body py-0">
+                <div className={classNames("chatapp-wrap", { "chatapp-info-active": showInfo }, { "chatapp-slide": states.chatState.startChat })}>  {/* In class { "chatapp-slide": startChating } */}
+                    <div className="chatapp-content">
+                    <ContactList invitePeople={() => setInvitePeople(!invitePeople)} />
+                        <div className="chatapp-single-chat">
+                            <ChatHeader infoState={showInfo} infoToggle={() => setShowInfo(!showInfo)} invitePeople={() => setInvitePeople(!invitePeople)} />
+                            <ChatBody />
+                            <ChatFooter />
+                            <ChatInfo infoToggle={() => setShowInfo(!showInfo)} />
+                        </div>
+                        {/* Invite People */}
+                        <InvitePeopleModal show={invitePeople} onClose={() => setInvitePeople(!invitePeople)} />
                     </div>
-                    {/* Invite People */}
-                    <InvitePeopleModal show={invitePeople} onClose={() => setInvitePeople(!invitePeople)} />
                 </div>
             </div>
-        </div>
-
+            <DebugTools />
+        </>
     )
 }
 
