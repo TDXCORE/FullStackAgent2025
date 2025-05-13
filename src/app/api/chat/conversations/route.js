@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-static';
-
 // Base URL for the new API
 const API_URL = 'https://waagentv1.onrender.com/api/conversations';
 
