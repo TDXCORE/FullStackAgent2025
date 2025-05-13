@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
-// Configuración dinámica condicional - solo se aplica en producción
-export const dynamic = process.env.NODE_ENV === 'production' ? 'force-static' : 'force-dynamic';
+// Configuración estática para compatibilidad con exportación estática
+export const dynamic = 'force-static';
 
-// Base URL for the new API
-const API_URL = 'https://waagentv1.onrender.com/api/users';
+// Base URL for the new API - Usa la variable de entorno
+const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waagentv1.onrender.com/api'}/users`;
 
 export async function GET() {
   try {

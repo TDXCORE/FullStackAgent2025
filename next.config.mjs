@@ -1,31 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // Configuración condicional basada en el entorno
-    ...(process.env.NODE_ENV === 'production' ? {
-        // En producción, usamos exportación estática para Render
-        output: 'export',
-        // Pero mantenemos las reescrituras para las API
-        // Nota: Las reescrituras no funcionan en exportación estática,
-        // pero las incluimos para mantener la configuración consistente
-        async rewrites() {
-            return [
-                {
-                    source: '/api/chat/:path*',
-                    destination: 'https://waagentv1.onrender.com/api/:path*',
-                },
-            ];
-        },
-    } : {
-        // En desarrollo, no usamos exportación estática para permitir API Routes dinámicas
-        async rewrites() {
-            return [
-                {
-                    source: '/api/chat/:path*',
-                    destination: 'https://waagentv1.onrender.com/api/:path*',
-                },
-            ];
-        },
-    }),
+    // Configuración para exportación estática (necesaria para Render)
+    output: 'export',
     
     // Configuración común para ambos entornos
     async redirects() {
@@ -33,12 +9,14 @@ const nextConfig = {
             {
                 source: '/',
                 destination: '/dashboard',
-                permanent: true, // Set to false if the redirect is temporary
+                permanent: true,
             },
         ];
     },
+    
+    // Configuración para SASS
     sassOptions: {
-        quietDeps: true, // Suppresses warnings from dependencies
+        quietDeps: true,
         api: 'modern-compiler',
     },
     
@@ -46,6 +24,12 @@ const nextConfig = {
     trailingSlash: true,
     images: {
         unoptimized: true,
+    },
+    
+    // Configuración de entorno
+    env: {
+        // Definimos variables de entorno aquí como fallback
+        NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waagentv1.onrender.com/api',
     },
 };
 

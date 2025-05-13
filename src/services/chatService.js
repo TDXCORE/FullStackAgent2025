@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// Base API URL
-const API_URL = '/api/chat';
+// Base API URL - Usa la variable de entorno si está disponible, de lo contrario usa la ruta relativa
+const API_URL = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_API_BASE_URL 
+  ? window.ENV.NEXT_PUBLIC_API_BASE_URL 
+  : process.env.NEXT_PUBLIC_API_BASE_URL || '/api/chat';
 
 /**
  * Get all contacts/users

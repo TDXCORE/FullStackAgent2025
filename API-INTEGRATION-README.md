@@ -8,58 +8,71 @@ El problema principal era la configuración `dynamic = 'force-static'` en los ar
 
 Además, la configuración `output: 'export'` en `next.config.mjs` estaba configurando la aplicación para exportación estática, lo que es incompatible con las API Routes dinámicas.
 
-## Cambios Realizados
+## Solución Implementada
 
-1. **Eliminación de `dynamic = 'force-static'`** de todos los archivos de ruta:
+Para resolver este problema, se ha implementado una solución híbrida que funciona tanto en desarrollo local como en producción:
+
+1. **Enfoque de cliente directo a API externa**:
+   - Se modificó `chatService.js` para que pueda usar directamente la API externa en producción
+   - Se configuraron variables de entorno para controlar la URL de la API
+
+2. **Configuración de Next.js**:
+   - Se simplificó `next.config.mjs` para usar `output: 'export'` en producción
+   - Se configuraron las rutas como estáticas (`dynamic = 'force-static'`) para compatibilidad con la exportación estática
+   - Se añadió soporte para variables de entorno en la configuración
+
+3. **Variables de entorno**:
+   - Se crearon archivos `.env.local` y `.env.production` para configurar el entorno
+   - Se configuró `NEXT_PUBLIC_API_BASE_URL` para apuntar a la API externa en producción
+
+4. **Scripts de construcción**:
+   - Se añadió un script `render-build` en `package.json` específico para Render
+
+## Archivos Modificados
+
+1. **`next.config.mjs`**:
+   - Simplificado para usar `output: 'export'` en producción
+   - Eliminadas las reescrituras (rewrites) que no son compatibles con la exportación estática
+   - Añadida configuración de variables de entorno
+
+2. **`package.json`**:
+   - Añadido script `render-build` para Render
+
+3. **`src/services/chatService.js`**:
+   - Modificado para usar la variable de entorno `NEXT_PUBLIC_API_BASE_URL`
+   - Configurado para funcionar tanto en desarrollo como en producción
+
+4. **Archivos de ruta**:
    - `src/app/api/chat/conversations/route.js`
    - `src/app/api/chat/messages/route.js`
    - `src/app/api/chat/users/route.js`
+   - Todos configurados para usar la variable de entorno y ser compatibles con la exportación estática
 
-2. **Modificación de `next.config.mjs`**:
-   - Eliminación de `output: 'export'`
-   - Adición de configuración de reescrituras (rewrites) para mejorar el manejo de las API:
-     ```javascript
-     async rewrites() {
-       return [
-         {
-           source: '/api/chat/:path*',
-           destination: 'https://waagentv1.onrender.com/api/:path*',
-         },
-       ];
-     },
-     ```
+5. **Nuevos archivos**:
+   - `.env.local`: Configuración para desarrollo local
+   - `.env.production`: Configuración para producción
 
-## Cómo Probar la Solución
+## Configuración en Render
 
-1. **Reiniciar el servidor de desarrollo**:
-   ```
-   npm run dev
-   ```
+Para que la aplicación funcione correctamente en Render, es necesario:
 
-2. **Ejecutar el script de prueba local**:
-   ```
-   run-local-api-tests.bat
-   ```
-   Este script probará las rutas de la API local para verificar que ahora funcionan correctamente.
+1. Configurar la variable de entorno `NEXT_PUBLIC_API_BASE_URL=https://waagentv1.onrender.com/api` en Render
+2. Usar el comando de construcción `npm run render-build` en lugar de `npm run build`
 
-3. **Usar la interfaz de depuración**:
-   - Navegar a `/apps/chat/debug` para usar la interfaz de depuración
-   - Navegar a `/apps/chat/test-api` para usar la herramienta de prueba de API
+## Desarrollo Local
 
-## Explicación Técnica
+Para desarrollo local, hay dos opciones:
 
-### ¿Por qué funcionaba para usuarios pero no para conversaciones y mensajes?
+1. **Usar API Routes locales**:
+   - Mantener comentada la variable `NEXT_PUBLIC_API_BASE_URL` en `.env.local`
+   - Ejecutar `npm run dev`
 
-La ruta de usuarios probablemente funcionaba porque es una solicitud simple sin parámetros en la URL. Las rutas de conversaciones y mensajes requieren parámetros dinámicos (`user_id` y `conversation_id`), que no pueden ser procesados correctamente en rutas estáticas.
+2. **Usar API externa directamente**:
+   - Descomentar y configurar `NEXT_PUBLIC_API_BASE_URL` en `.env.local`
+   - Ejecutar `npm run dev`
 
-### ¿Por qué funcionaba el script de prueba directo?
+## Notas Adicionales
 
-El script de prueba hace solicitudes directamente a la API externa (`https://waagentv1.onrender.com/api/...`), sin pasar por las rutas de Next.js. No está limitado por la configuración `dynamic = 'force-static'`.
-
-### ¿Qué hace la configuración de reescrituras (rewrites)?
-
-La configuración de reescrituras permite que las solicitudes a `/api/chat/...` se redirijan a `https://waagentv1.onrender.com/api/...`. Esto proporciona una capa adicional de flexibilidad y puede ayudar a evitar problemas de CORS.
-
-## Conclusión
-
-Los cambios realizados permiten que las rutas de API funcionen correctamente en tiempo de ejecución y puedan manejar parámetros dinámicos. Esto debería resolver el problema de integración con la API externa.
+- Las rutas dinámicas como `/api/chat/conversations?user_id=123` funcionarán correctamente en desarrollo local
+- En producción, las solicitudes se harán directamente a la API externa
+- Esta solución mantiene la compatibilidad con la exportación estática requerida por Render
