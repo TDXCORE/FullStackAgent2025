@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Configuración dinámica condicional - solo se aplica en producción
+export const dynamic = process.env.NODE_ENV === 'production' ? 'force-static' : 'force-dynamic';
+
 // Base URL for the new API
 const API_URL = 'https://waagentv1.onrender.com/api/users';
 
