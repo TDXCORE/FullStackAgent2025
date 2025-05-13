@@ -150,6 +150,12 @@ const chatReducer = (state = chatInitialStates, action) => {
                 error: action.error
             };
             
+        case "update_messages":
+            return {
+                ...state,
+                msg: action.messages
+            };
+            
         default:
             return state;
     }

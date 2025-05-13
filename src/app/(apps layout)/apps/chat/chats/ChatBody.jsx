@@ -36,6 +36,34 @@ const ChatBody = () => {
         fetchMessages();
     }, [states.chatState.currentConversationId, dispatch]);
 
+    // Polling para actualizar mensajes periódicamente
+    useEffect(() => {
+        if (states.chatState.currentConversationId) {
+            // Función para obtener mensajes más recientes
+            const fetchLatestMessages = async () => {
+                try {
+                    const messagesData = await getMessages(states.chatState.currentConversationId);
+                    // Solo actualizar si hay cambios en los mensajes
+                    if (JSON.stringify(messagesData) !== JSON.stringify(states.chatState.msg)) {
+                        console.log("Nuevos mensajes detectados, actualizando...");
+                        dispatch({ type: "update_messages", messages: messagesData });
+                    }
+                } catch (error) {
+                    console.error("Error en polling de mensajes:", error);
+                }
+            };
+            
+            // Ejecutar cada 3 segundos
+            const intervalId = setInterval(fetchLatestMessages, 3000);
+            
+            // Limpiar intervalo al desmontar o cambiar de conversación
+            return () => {
+                console.log("Limpiando intervalo de polling");
+                clearInterval(intervalId);
+            };
+        }
+    }, [states.chatState.currentConversationId, dispatch, states.chatState.msg]);
+
     // Update local messages state when redux state changes
     useEffect(() => {
         setMessages(states.chatState.msg);
