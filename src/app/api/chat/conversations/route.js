@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseClient';
 
 export const dynamic = 'force-static';
+
+// Base URL for the new API
+const API_URL = 'https://waagentv1.onrender.com/api/conversations';
 
 export async function GET(request) {
   try {
@@ -13,23 +15,13 @@ export async function GET(request) {
       return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
     }
     
-    // Get all conversations for the user
-    const { data, error } = await supabaseAdmin
-      .from('conversations')
-      .select(`
-        id, 
-        external_id, 
-        platform, 
-        status, 
-        created_at,
-        updated_at
-      `)
-      .eq('user_id', user_id)
-      .eq('status', 'active');
+    // Call the new endpoint
+    const response = await fetch(`${API_URL}?user_id=${user_id}`);
+    const data = await response.json();
     
-    if (error) {
-      console.error('Error fetching conversations:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!response.ok) {
+      console.error('Error fetching conversations:', data);
+      return NextResponse.json({ error: data.error || 'Error fetching conversations' }, { status: response.status });
     }
     
     return NextResponse.json(data);
@@ -48,23 +40,87 @@ export async function POST(request) {
       return NextResponse.json({ error: 'user_id and external_id are required' }, { status: 400 });
     }
     
-    // Create a new conversation
-    const { data, error } = await supabaseAdmin
-      .from('conversations')
-      .insert({
+    // Call the new endpoint to create a conversation
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         user_id,
         external_id,
         platform,
         status: 'active'
-      })
-      .select();
+      }),
+    });
     
-    if (error) {
-      console.error('Error creating conversation:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Error creating conversation:', data);
+      return NextResponse.json({ error: data.error || 'Error creating conversation' }, { status: response.status });
     }
     
-    return NextResponse.json(data[0], { status: 201 });
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    console.error('Error in conversations API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request) {
+  try {
+    const body = await request.json();
+    const { id, ...updateData } = body;
+    
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    
+    // Call the new endpoint to update a conversation
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Error updating conversation:', data);
+      return NextResponse.json({ error: data.error || 'Error updating conversation' }, { status: response.status });
+    }
+    
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error in conversations API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    
+    // Call the new endpoint to delete a conversation
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error deleting conversation:', errorData);
+      return NextResponse.json({ error: errorData.error || 'Error deleting conversation' }, { status: response.status });
+    }
+    
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error in conversations API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

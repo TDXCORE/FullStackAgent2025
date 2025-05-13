@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseClient';
 
 export const dynamic = 'force-static';
 
+// Base URL for the new API
+const API_URL = 'https://waagentv1.onrender.com/api/users';
+
 export async function GET() {
   try {
-    // Get all users from Supabase
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('id, full_name, phone, email, company, created_at');
+    // Call the new endpoint
+    const response = await fetch(API_URL);
+    const data = await response.json();
     
-    if (error) {
-      console.error('Error fetching users:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!response.ok) {
+      console.error('Error fetching users:', data);
+      return NextResponse.json({ error: data.error || 'Error fetching users' }, { status: response.status });
     }
     
     // Transform data for frontend
@@ -32,6 +33,92 @@ export async function GET() {
     }));
     
     return NextResponse.json(contacts);
+  } catch (error) {
+    console.error('Error in users API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    
+    // Call the new endpoint to create a user
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Error creating user:', data);
+      return NextResponse.json({ error: data.error || 'Error creating user' }, { status: response.status });
+    }
+    
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    console.error('Error in users API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request) {
+  try {
+    const body = await request.json();
+    const { id, ...updateData } = body;
+    
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    
+    // Call the new endpoint to update a user
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Error updating user:', data);
+      return NextResponse.json({ error: data.error || 'Error updating user' }, { status: response.status });
+    }
+    
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error in users API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    
+    // Call the new endpoint to delete a user
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error deleting user:', errorData);
+      return NextResponse.json({ error: errorData.error || 'Error deleting user' }, { status: response.status });
+    }
+    
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error in users API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
