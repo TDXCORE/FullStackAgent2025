@@ -169,13 +169,27 @@ const chatReducer = (state = chatInitialStates, action) => {
             };
             
         case "update_conversation":
+            // Actualizar la conversación específica y mantener el orden (no leídos primero)
+            const updatedConversations = state.conversations.map(conv => 
+                conv.id === action.conversation.id 
+                    ? { ...conv, ...action.conversation } 
+                    : conv
+            );
+            
+            // Ordenar las conversaciones: primero las que tienen mensajes no leídos,
+            // luego por fecha de actualización más reciente
+            const sortedConversations = [...updatedConversations].sort((a, b) => {
+                // Primero ordenar por mensajes no leídos (mayor a menor)
+                if (a.unread_count !== b.unread_count) {
+                    return b.unread_count - a.unread_count;
+                }
+                // Luego por fecha de actualización (más reciente primero)
+                return new Date(b.updated_at) - new Date(a.updated_at);
+            });
+            
             return {
                 ...state,
-                conversations: state.conversations.map(conv => 
-                    conv.id === action.conversation.id 
-                        ? { ...conv, ...action.conversation } 
-                        : conv
-                )
+                conversations: sortedConversations
             };
             
         default:

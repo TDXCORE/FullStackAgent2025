@@ -20,16 +20,28 @@ const ChatBody = () => {
         const fetchMessages = async () => {
             if (states.chatState.currentConversationId) {
                 try {
+                    console.log(`Obteniendo mensajes para conversación ID: ${states.chatState.currentConversationId}`);
                     setLoading(true);
                     dispatch({ type: "fetch_messages_request" });
                     const messagesData = await getMessages(states.chatState.currentConversationId);
+                    console.log(`Mensajes obtenidos:`, messagesData);
                     dispatch({ type: "fetch_messages_success", messages: messagesData });
+                    
+                    // Desplazar automáticamente al último mensaje
+                    setTimeout(() => {
+                        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                    
                     setLoading(false);
                 } catch (error) {
                     console.error("Error fetching messages:", error);
                     dispatch({ type: "fetch_messages_failure", error: error.message });
                     setLoading(false);
                 }
+            } else {
+                console.log("No hay conversación seleccionada");
+                // Limpiar mensajes si no hay conversación seleccionada
+                dispatch({ type: "update_messages", messages: [] });
             }
         };
         
@@ -43,13 +55,24 @@ const ChatBody = () => {
             const fetchLatestMessages = async () => {
                 try {
                     const messagesData = await getMessages(states.chatState.currentConversationId);
-                    // Solo actualizar si hay cambios en los mensajes
-                    if (JSON.stringify(messagesData) !== JSON.stringify(states.chatState.msg)) {
-                        console.log("Nuevos mensajes detectados, actualizando...");
+                    
+                    // Verificar si hay cambios en los mensajes
+                    const currentMessages = states.chatState.msg || [];
+                    const hasNewMessages = messagesData.length !== currentMessages.length ||
+                        JSON.stringify(messagesData) !== JSON.stringify(currentMessages);
+                    
+                    if (hasNewMessages) {
+                        console.log("Nuevos mensajes detectados, actualizando...", {
+                            nuevos: messagesData.length,
+                            actuales: currentMessages.length
+                        });
+                        
                         dispatch({ type: "update_messages", messages: messagesData });
                         
                         // Desplazar automáticamente al último mensaje
-                        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        setTimeout(() => {
+                            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
                         
                         // Si hay mensajes nuevos y la conversación actual tiene mensajes no leídos,
                         // marcarlos como leídos
@@ -59,6 +82,7 @@ const ChatBody = () => {
                         
                         if (currentConversation && currentConversation.unread_count > 0) {
                             try {
+                                console.log(`Marcando mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
                                 await markMessagesAsRead(states.chatState.currentConversationId);
                                 
                                 // Actualizar el estado global
@@ -85,7 +109,7 @@ const ChatBody = () => {
             
             // Limpiar intervalo al desmontar o cambiar de conversación
             return () => {
-                console.log("Limpiando intervalo de polling");
+                console.log("Limpiando intervalo de polling para conversación:", states.chatState.currentConversationId);
                 clearInterval(intervalId);
             };
         }

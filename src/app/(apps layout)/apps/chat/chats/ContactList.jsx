@@ -72,13 +72,13 @@ const ContactList = ({ invitePeople }) => {
                         // Ordenar conversaciones (no leídas primero)
                         const sortedConversations = sortConversations(conversations);
                         
-                        // Actualizar el estado global con un console.log para depuración
                         console.log("Actualizando conversaciones:", sortedConversations);
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
                         
                         // Actualizar la lista de contactos con información de conversaciones
                         if (states.chatState.contacts && states.chatState.contacts.length > 0) {
-                            const updatedList = states.chatState.contacts.map(contact => {
+                            // Primero crear un mapa de contactos con sus conversaciones
+                            const contactsWithConversations = states.chatState.contacts.map(contact => {
                                 // Buscar si hay una conversación para este contacto
                                 const conversation = sortedConversations.find(
                                     conv => conv.external_id === contact.id
@@ -90,14 +90,40 @@ const ContactList = ({ invitePeople }) => {
                                         ...contact,
                                         unread: conversation.unread_count || 0,
                                         lastChat: conversation.last_message || "Click to start conversation",
-                                        time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                        time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                                        conversationId: conversation.id,
+                                        updated_at: conversation.updated_at
                                     };
                                 }
-                                return contact;
+                                return {
+                                    ...contact,
+                                    unread: 0,
+                                    lastChat: "Click to start conversation",
+                                    time: "",
+                                    updated_at: null
+                                };
                             });
                             
-                            // Forzar actualización de la lista
-                            setList([...updatedList]);
+                            // Ahora ordenar la lista de contactos: primero los que tienen mensajes no leídos,
+                            // luego por fecha de actualización más reciente
+                            const sortedContacts = [...contactsWithConversations].sort((a, b) => {
+                                // Primero ordenar por mensajes no leídos (mayor a menor)
+                                if ((a.unread || 0) !== (b.unread || 0)) {
+                                    return (b.unread || 0) - (a.unread || 0);
+                                }
+                                // Luego por fecha de actualización (más reciente primero)
+                                if (a.updated_at && b.updated_at) {
+                                    return new Date(b.updated_at) - new Date(a.updated_at);
+                                }
+                                // Si uno tiene fecha y el otro no, el que tiene fecha va primero
+                                if (a.updated_at && !b.updated_at) return -1;
+                                if (!a.updated_at && b.updated_at) return 1;
+                                // Si ninguno tiene fecha, mantener el orden original
+                                return 0;
+                            });
+                            
+                            // Actualizar la lista con los contactos ordenados
+                            setList([...sortedContacts]);
                         }
                     }
                 } catch (error) {
@@ -116,6 +142,8 @@ const ContactList = ({ invitePeople }) => {
     }, [states.chatState.userId, dispatch, states.chatState.contacts, sortConversations]);
 
     const Conversation = async (index, id) => {
+        console.log(`Seleccionando conversación para contacto ID: ${id}, índice: ${index}`);
+        
         // Set the selected user
         if (list[index].avatar) {
             dispatch({ 
@@ -135,28 +163,43 @@ const ContactList = ({ invitePeople }) => {
             });
         }
 
-        // Buscar la conversación correspondiente
-        const conversation = states.chatState.conversations.find(
-            conv => conv.external_id === id
-        );
-        
-        if (conversation) {
-            // Establecer la conversación actual
+        // Si el contacto ya tiene un ID de conversación almacenado, usarlo directamente
+        if (list[index].conversationId) {
+            console.log(`Usando conversationId almacenado: ${list[index].conversationId}`);
             dispatch({ 
                 type: "set_current_conversation", 
-                conversationId: conversation.id 
+                conversationId: list[index].conversationId 
             });
             
-            // Si hay mensajes no leídos, marcarlos como leídos
-            if (conversation.unread_count > 0) {
+            // Buscar la conversación en el estado global
+            const conversation = states.chatState.conversations.find(
+                conv => conv.id === list[index].conversationId
+            );
+            
+            if (conversation && conversation.unread_count > 0) {
                 try {
+                    console.log(`Marcando mensajes como leídos para conversación: ${conversation.id}`);
                     await markMessagesAsRead(conversation.id);
                     
                     // Actualizar la UI optimistamente
-                    const updatedContacts = list.map((contactList) =>
-                        contactList.id === id ? { ...contactList, unread: 0 } : contactList
+                    const updatedContacts = list.map((contactList, idx) =>
+                        idx === index ? { ...contactList, unread: 0 } : contactList
                     );
-                    setList(updatedContacts);
+                    
+                    // Ordenar la lista actualizada
+                    const sortedUpdatedContacts = [...updatedContacts].sort((a, b) => {
+                        if ((a.unread || 0) !== (b.unread || 0)) {
+                            return (b.unread || 0) - (a.unread || 0);
+                        }
+                        if (a.updated_at && b.updated_at) {
+                            return new Date(b.updated_at) - new Date(a.updated_at);
+                        }
+                        if (a.updated_at && !b.updated_at) return -1;
+                        if (!a.updated_at && b.updated_at) return 1;
+                        return 0;
+                    });
+                    
+                    setList(sortedUpdatedContacts);
                     
                     // Actualizar el estado global
                     dispatch({
@@ -169,6 +212,67 @@ const ContactList = ({ invitePeople }) => {
                 } catch (error) {
                     console.error("Error al marcar mensajes como leídos:", error);
                 }
+            }
+        } else {
+            // Buscar la conversación correspondiente por external_id
+            const conversation = states.chatState.conversations.find(
+                conv => conv.external_id === id
+            );
+            
+            if (conversation) {
+                console.log(`Encontrada conversación por external_id: ${conversation.id}`);
+                // Establecer la conversación actual
+                dispatch({ 
+                    type: "set_current_conversation", 
+                    conversationId: conversation.id 
+                });
+                
+                // Actualizar el contacto con el ID de conversación para futuras referencias
+                const updatedContacts = list.map((contactList, idx) =>
+                    idx === index ? { ...contactList, conversationId: conversation.id } : contactList
+                );
+                setList(updatedContacts);
+                
+                // Si hay mensajes no leídos, marcarlos como leídos
+                if (conversation.unread_count > 0) {
+                    try {
+                        console.log(`Marcando mensajes como leídos para conversación: ${conversation.id}`);
+                        await markMessagesAsRead(conversation.id);
+                        
+                        // Actualizar la UI optimistamente
+                        const updatedContactsWithRead = updatedContacts.map((contactList, idx) =>
+                            idx === index ? { ...contactList, unread: 0 } : contactList
+                        );
+                        
+                        // Ordenar la lista actualizada
+                        const sortedUpdatedContacts = [...updatedContactsWithRead].sort((a, b) => {
+                            if ((a.unread || 0) !== (b.unread || 0)) {
+                                return (b.unread || 0) - (a.unread || 0);
+                            }
+                            if (a.updated_at && b.updated_at) {
+                                return new Date(b.updated_at) - new Date(a.updated_at);
+                            }
+                            if (a.updated_at && !b.updated_at) return -1;
+                            if (!a.updated_at && b.updated_at) return 1;
+                            return 0;
+                        });
+                        
+                        setList(sortedUpdatedContacts);
+                        
+                        // Actualizar el estado global
+                        dispatch({
+                            type: "update_conversation",
+                            conversation: {
+                                ...conversation,
+                                unread_count: 0
+                            }
+                        });
+                    } catch (error) {
+                        console.error("Error al marcar mensajes como leídos:", error);
+                    }
+                }
+            } else {
+                console.log(`No se encontró conversación para el contacto ID: ${id}`);
             }
         }
 
