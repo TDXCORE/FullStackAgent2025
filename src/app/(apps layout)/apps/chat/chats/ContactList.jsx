@@ -79,11 +79,17 @@ const ContactList = ({ invitePeople }) => {
     
     // Polling para actualizar conversaciones periódicamente
     useEffect(() => {
-        if (states.chatState.userId) {
-            const fetchLatestConversations = async () => {
-                try {
-                    console.log(`ContactList: Fetching conversations for user ID: ${states.chatState.userId}`);
-                    const conversations = await getConversations(states.chatState.userId);
+        // Función para obtener todas las conversaciones para todos los contactos
+        const fetchAllConversations = async () => {
+            try {
+                // Si tenemos contactos, obtener conversaciones para cada uno
+                if (states.chatState.contacts && states.chatState.contacts.length > 0) {
+                    // Usar el primer contacto como usuario principal para obtener todas las conversaciones
+                    // Esto es temporal, idealmente deberíamos tener un endpoint que devuelva todas las conversaciones
+                    const mainUserId = states.chatState.contacts[0].id;
+                    console.log(`ContactList: Fetching all conversations using user ID: ${mainUserId}`);
+                    
+                    const conversations = await getConversations(mainUserId);
                     
                     // Verificar que tenemos datos válidos
                     if (conversations && Array.isArray(conversations)) {
@@ -169,19 +175,19 @@ const ContactList = ({ invitePeople }) => {
                             setList([...sortedContacts]);
                         }
                     }
-                } catch (error) {
-                    console.error("Error en polling de conversaciones:", error);
                 }
-            };
-            
-            // Ejecutar inmediatamente y luego cada 3 segundos
-            fetchLatestConversations();
-            const intervalId = setInterval(fetchLatestConversations, 3000);
-            
-            return () => {
-                clearInterval(intervalId);
-            };
-        }
+            } catch (error) {
+                console.error("Error en polling de conversaciones:", error);
+            }
+        };
+        
+        // Ejecutar inmediatamente y luego cada 3 segundos
+        fetchAllConversations();
+        const intervalId = setInterval(fetchAllConversations, 3000);
+        
+        return () => {
+            clearInterval(intervalId);
+        };
     }, [states.chatState.userId, dispatch, states.chatState.contacts, sortConversations]);
 
     const Conversation = async (index, id) => {
