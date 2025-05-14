@@ -179,9 +179,15 @@ const chatReducer = (state = chatInitialStates, action) => {
             // Ordenar las conversaciones: primero las que tienen mensajes no leídos,
             // luego por fecha de actualización más reciente
             const sortedConversations = [...updatedConversations].sort((a, b) => {
+                // Asegurar que unread_count sea un número
+                const aUnread = Number(a.unread_count || 0);
+                const bUnread = Number(b.unread_count || 0);
+                
+                console.log(`Ordenando conversaciones en reducer: ${a.id.substring(0, 8)} (unread: ${aUnread}) vs ${b.id.substring(0, 8)} (unread: ${bUnread})`);
+                
                 // Primero ordenar por mensajes no leídos (mayor a menor)
-                if (a.unread_count !== b.unread_count) {
-                    return b.unread_count - a.unread_count;
+                if (aUnread !== bUnread) {
+                    return bUnread - aUnread;
                 }
                 // Luego por fecha de actualización (más reciente primero)
                 if (a.updated_at && b.updated_at) {

@@ -29,13 +29,30 @@ const ContactList = ({ invitePeople }) => {
     const sortConversations = useCallback((conversations) => {
         if (!conversations || !Array.isArray(conversations)) return [];
         
+        console.log("Ordenando conversaciones:", conversations.map(c => ({
+            id: c.id.substring(0, 8),
+            unread: c.unread_count,
+            unread_type: typeof c.unread_count
+        })));
+        
         return [...conversations].sort((a, b) => {
+            // Asegurar que unread_count sea un número
+            const aUnread = Number(a.unread_count || 0);
+            const bUnread = Number(b.unread_count || 0);
+            
             // Primero ordenar por mensajes no leídos (mayor a menor)
-            if (a.unread_count !== b.unread_count) {
-                return b.unread_count - a.unread_count;
+            if (aUnread !== bUnread) {
+                return bUnread - aUnread;
             }
             // Luego por fecha de actualización (más reciente primero)
-            return new Date(b.updated_at) - new Date(a.updated_at);
+            if (a.updated_at && b.updated_at) {
+                return new Date(b.updated_at) - new Date(a.updated_at);
+            }
+            // Si uno tiene fecha y el otro no, el que tiene fecha va primero
+            if (a.updated_at && !b.updated_at) return -1;
+            if (!a.updated_at && b.updated_at) return 1;
+            // Si ninguno tiene fecha, mantener el orden original
+            return 0;
         });
     }, []);
 
@@ -94,10 +111,12 @@ const ContactList = ({ invitePeople }) => {
                                 }
                                 
                                 if (conversation) {
-                                    console.log("Contacto con conversación:", contact.id, "unread:", conversation.unread_count, "external_id:", conversation.external_id);
+                                    // Asegurar que unread_count sea un número
+                                    const unreadCount = Number(conversation.unread_count || 0);
+                                    console.log("Contacto con conversación:", contact.id, "unread:", unreadCount, "external_id:", conversation.external_id);
                                     return {
                                         ...contact,
-                                        unread: conversation.unread_count || 0,
+                                        unread: unreadCount,
                                         lastChat: conversation.last_message || "Click to start conversation",
                                         time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                                         conversationId: conversation.id,
@@ -197,9 +216,15 @@ const ContactList = ({ invitePeople }) => {
                     
                             // Ordenar la lista actualizada
                             const sortedUpdatedContacts = [...updatedContacts].sort((a, b) => {
+                                // Asegurar que unread sea un número
+                                const aUnread = Number(a.unread || 0);
+                                const bUnread = Number(b.unread || 0);
+                                
+                                console.log(`Ordenando contactos actualizados: ${a.name} (unread: ${aUnread}) vs ${b.name} (unread: ${bUnread})`);
+                                
                                 // Primero ordenar por mensajes no leídos (mayor a menor)
-                                if ((a.unread || 0) !== (b.unread || 0)) {
-                                    return (b.unread || 0) - (a.unread || 0);
+                                if (aUnread !== bUnread) {
+                                    return bUnread - aUnread;
                                 }
                                 // Luego por fecha de actualización (más reciente primero)
                                 if (a.updated_at && b.updated_at) {
@@ -260,9 +285,15 @@ const ContactList = ({ invitePeople }) => {
                         
                         // Ordenar la lista actualizada
                         const sortedUpdatedContacts = [...updatedContactsWithRead].sort((a, b) => {
+                            // Asegurar que unread sea un número
+                            const aUnread = Number(a.unread || 0);
+                            const bUnread = Number(b.unread || 0);
+                            
+                            console.log(`Ordenando contactos actualizados: ${a.name} (unread: ${aUnread}) vs ${b.name} (unread: ${bUnread})`);
+                            
                             // Primero ordenar por mensajes no leídos (mayor a menor)
-                            if ((a.unread || 0) !== (b.unread || 0)) {
-                                return (b.unread || 0) - (a.unread || 0);
+                            if (aUnread !== bUnread) {
+                                return bUnread - aUnread;
                             }
                             // Luego por fecha de actualización (más reciente primero)
                             if (a.updated_at && b.updated_at) {
