@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form, Spinner } from 'react-bootstrap';
-import { getContacts, getConversations, getMessages, createConversation, sendMessage } from '@/services/chatService';
+import { getContacts, getConversations, getMessages, createConversation, sendMessage, markMessagesAsRead } from '@/services/chatService';
 
 const TestApiPage = () => {
   const [logs, setLogs] = useState([]);
@@ -236,25 +236,58 @@ const TestApiPage = () => {
                         <tr>
                           <th>ID</th>
                           <th>External ID</th>
+                          <th>Unread</th>
                           <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {conversations.map(conv => (
-                          <tr key={conv.id}>
+                          <tr key={conv.id} style={conv.unread_count > 0 ? {backgroundColor: "rgba(0, 123, 255, 0.15)", fontWeight: "bold"} : {}}>
                             <td>{conv.id}</td>
                             <td>{conv.external_id}</td>
                             <td>
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm" 
-                                onClick={() => {
-                                  setConversationId(conv.id);
-                                  addLog(`Selected conversation ID: ${conv.id}`);
-                                }}
-                              >
-                                Select
-                              </Button>
+                              {conv.unread_count > 0 ? (
+                                <span className="badge bg-danger">{conv.unread_count}</span>
+                              ) : (
+                                <span className="badge bg-secondary">0</span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="d-flex gap-1">
+                                <Button 
+                                  variant="outline-primary" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setConversationId(conv.id);
+                                    addLog(`Selected conversation ID: ${conv.id}`);
+                                  }}
+                                >
+                                  Select
+                                </Button>
+                                {conv.unread_count > 0 && (
+                                  <Button 
+                                    variant="outline-success" 
+                                    size="sm" 
+                                    onClick={async () => {
+                                      try {
+                                        setLoading(true);
+                                        addLog(`Marking messages as read for conversation ID: ${conv.id}...`);
+                                        const result = await markMessagesAsRead(conv.id);
+                                        addLog(`Success! Marked ${result.updated_count || 'all'} messages as read`);
+                                        // Refresh conversations list
+                                        testGetConversations();
+                                      } catch (error) {
+                                        addLog(`Error: ${error.message}`);
+                                        console.error('Error marking messages as read:', error);
+                                      } finally {
+                                        setLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    Mark Read
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -283,14 +316,44 @@ const TestApiPage = () => {
                 />
               </Form.Group>
               
-              <Button 
-                variant="primary" 
-                onClick={testGetMessages} 
-                disabled={loading || !conversationId}
-                className="mb-3"
-              >
-                {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Get Messages'}
-              </Button>
+              <div className="d-flex gap-2 mb-3">
+                <Button 
+                  variant="primary" 
+                  onClick={testGetMessages} 
+                  disabled={loading || !conversationId}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Get Messages'}
+                </Button>
+                
+                <Button 
+                  variant="warning" 
+                  onClick={async () => {
+                    if (!conversationId) {
+                      addLog('Error: Please enter a conversation ID');
+                      return;
+                    }
+                    
+                    try {
+                      setLoading(true);
+                      addLog(`Marking messages as read for conversation ID: ${conversationId}...`);
+                      const result = await markMessagesAsRead(conversationId);
+                      addLog(`Success! Marked ${result.updated_count || 'all'} messages as read`);
+                      // Refresh conversations list
+                      if (userId) {
+                        testGetConversations();
+                      }
+                    } catch (error) {
+                      addLog(`Error: ${error.message}`);
+                      console.error('Error marking messages as read:', error);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading || !conversationId}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Mark as Read'}
+                </Button>
+              </div>
               
               <Form.Group className="mb-3">
                 <Form.Label>New Message</Form.Label>
@@ -321,6 +384,7 @@ const TestApiPage = () => {
                           <th>Type</th>
                           <th>Content</th>
                           <th>Time</th>
+                          <th>Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -330,6 +394,13 @@ const TestApiPage = () => {
                             <td>{msg.types}</td>
                             <td>{msg.text}</td>
                             <td>{msg.time}</td>
+                            <td>
+                              {msg.read === false ? (
+                                <span className="badge bg-danger">Unread</span>
+                              ) : (
+                                <span className="badge bg-success">Read</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -337,6 +408,94 @@ const TestApiPage = () => {
                   </div>
                 </div>
               )}
+            </Card.Body>
+          </Card>
+          
+          <Card className="mb-4">
+            <Card.Header>
+              <h5 className="mb-0">Unread Messages Test</h5>
+            </Card.Header>
+            <Card.Body>
+              <p className="text-muted">Test the unread messages functionality</p>
+              
+              <div className="d-flex flex-column gap-2">
+                <Button 
+                  variant="info" 
+                  onClick={async () => {
+                    if (!userId) {
+                      addLog('Error: Please select a user first');
+                      return;
+                    }
+                    
+                    try {
+                      setLoading(true);
+                      addLog('Testing unread messages functionality...');
+                      
+                      // 1. Get conversations for the user
+                      addLog(`Fetching conversations for user ID: ${userId}...`);
+                      const conversations = await getConversations(userId);
+                      
+                      if (conversations.length === 0) {
+                        addLog('No conversations found. Please create a conversation first.');
+                        setLoading(false);
+                        return;
+                      }
+                      
+                      // 2. Check if conversations are sorted by unread count
+                      let isSorted = true;
+                      for (let i = 0; i < conversations.length - 1; i++) {
+                        if (conversations[i].unread_count < conversations[i + 1].unread_count) {
+                          isSorted = false;
+                          break;
+                        }
+                      }
+                      
+                      addLog(`Conversations sorted by unread count: ${isSorted ? 'Yes' : 'No'}`);
+                      
+                      // 3. Display unread counts for each conversation
+                      conversations.forEach(conv => {
+                        addLog(`Conversation ${conv.id}: ${conv.unread_count} unread messages`);
+                      });
+                      
+                      setLoading(false);
+                    } catch (error) {
+                      addLog(`Error: ${error.message}`);
+                      console.error('Error testing unread messages:', error);
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading || !userId}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Test Unread Messages Sorting'}
+                </Button>
+                
+                <Button 
+                  variant="primary" 
+                  onClick={async () => {
+                    if (!userId) {
+                      addLog('Error: Please select a user first');
+                      return;
+                    }
+                    
+                    try {
+                      setLoading(true);
+                      addLog('Refreshing conversation list to check unread status...');
+                      
+                      // Refresh conversations list
+                      await testGetConversations();
+                      
+                      setLoading(false);
+                    } catch (error) {
+                      addLog(`Error: ${error.message}`);
+                      console.error('Error refreshing conversations:', error);
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading || !userId}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Refresh Conversations'}
+                </Button>
+              </div>
             </Card.Body>
           </Card>
           

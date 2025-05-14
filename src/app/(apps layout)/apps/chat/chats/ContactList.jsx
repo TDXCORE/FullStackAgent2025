@@ -80,12 +80,21 @@ const ContactList = ({ invitePeople }) => {
                             // Primero crear un mapa de contactos con sus conversaciones
                             const contactsWithConversations = states.chatState.contacts.map(contact => {
                                 // Buscar si hay una conversación para este contacto
-                                const conversation = sortedConversations.find(
+                                // Primero intentar buscar por external_id exacto
+                                let conversation = sortedConversations.find(
                                     conv => conv.external_id === contact.id
                                 );
                                 
+                                // Si no se encuentra, intentar buscar por external_id que contenga el ID del contacto
+                                // Esto es útil para conversaciones web donde el external_id puede ser "web-timestamp"
+                                if (!conversation) {
+                                    conversation = sortedConversations.find(
+                                        conv => conv.external_id.includes(contact.id)
+                                    );
+                                }
+                                
                                 if (conversation) {
-                                    console.log("Contacto con conversación:", contact.id, "unread:", conversation.unread_count);
+                                    console.log("Contacto con conversación:", contact.id, "unread:", conversation.unread_count, "external_id:", conversation.external_id);
                                     return {
                                         ...contact,
                                         unread: conversation.unread_count || 0,
@@ -186,20 +195,25 @@ const ContactList = ({ invitePeople }) => {
                         idx === index ? { ...contactList, unread: 0 } : contactList
                     );
                     
-                    // Ordenar la lista actualizada
-                    const sortedUpdatedContacts = [...updatedContacts].sort((a, b) => {
-                        if ((a.unread || 0) !== (b.unread || 0)) {
-                            return (b.unread || 0) - (a.unread || 0);
-                        }
-                        if (a.updated_at && b.updated_at) {
-                            return new Date(b.updated_at) - new Date(a.updated_at);
-                        }
-                        if (a.updated_at && !b.updated_at) return -1;
-                        if (!a.updated_at && b.updated_at) return 1;
-                        return 0;
-                    });
-                    
-                    setList(sortedUpdatedContacts);
+                            // Ordenar la lista actualizada
+                            const sortedUpdatedContacts = [...updatedContacts].sort((a, b) => {
+                                // Primero ordenar por mensajes no leídos (mayor a menor)
+                                if ((a.unread || 0) !== (b.unread || 0)) {
+                                    return (b.unread || 0) - (a.unread || 0);
+                                }
+                                // Luego por fecha de actualización (más reciente primero)
+                                if (a.updated_at && b.updated_at) {
+                                    return new Date(b.updated_at) - new Date(a.updated_at);
+                                }
+                                // Si uno tiene fecha y el otro no, el que tiene fecha va primero
+                                if (a.updated_at && !b.updated_at) return -1;
+                                if (!a.updated_at && b.updated_at) return 1;
+                                // Si ninguno tiene fecha, mantener el orden original
+                                return 0;
+                            });
+                            
+                            // Forzar actualización de la lista con los contactos ordenados
+                            setList([...sortedUpdatedContacts]);
                     
                     // Actualizar el estado global
                     dispatch({
@@ -246,18 +260,23 @@ const ContactList = ({ invitePeople }) => {
                         
                         // Ordenar la lista actualizada
                         const sortedUpdatedContacts = [...updatedContactsWithRead].sort((a, b) => {
+                            // Primero ordenar por mensajes no leídos (mayor a menor)
                             if ((a.unread || 0) !== (b.unread || 0)) {
                                 return (b.unread || 0) - (a.unread || 0);
                             }
+                            // Luego por fecha de actualización (más reciente primero)
                             if (a.updated_at && b.updated_at) {
                                 return new Date(b.updated_at) - new Date(a.updated_at);
                             }
+                            // Si uno tiene fecha y el otro no, el que tiene fecha va primero
                             if (a.updated_at && !b.updated_at) return -1;
                             if (!a.updated_at && b.updated_at) return 1;
+                            // Si ninguno tiene fecha, mantener el orden original
                             return 0;
                         });
                         
-                        setList(sortedUpdatedContacts);
+                        // Forzar actualización de la lista con los contactos ordenados
+                        setList([...sortedUpdatedContacts]);
                         
                         // Actualizar el estado global
                         dispatch({
@@ -458,6 +477,7 @@ const ContactList = ({ invitePeople }) => {
                                         borderLeft: "3px solid #007bff",
                                         fontWeight: "bold"
                                     } : {}}
+                                    data-unread={elem.unread > 0 ? 'true' : 'false'}
                                 >
                                     <div className={classNames("media", { "active-user": elem.id === states.chatState.userId }, { "read-chat": !elem.unread })}>
                                         <div className="media-head">

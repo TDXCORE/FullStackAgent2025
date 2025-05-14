@@ -34,7 +34,8 @@ export async function GET(request) {
       text: message.content,
       time: new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       message_type: message.message_type,
-      media_url: message.media_url
+      media_url: message.media_url,
+      read: message.read // Include read status from backend
     }));
     
     return NextResponse.json(messages);

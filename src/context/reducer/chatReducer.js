@@ -184,8 +184,18 @@ const chatReducer = (state = chatInitialStates, action) => {
                     return b.unread_count - a.unread_count;
                 }
                 // Luego por fecha de actualización (más reciente primero)
-                return new Date(b.updated_at) - new Date(a.updated_at);
+                if (a.updated_at && b.updated_at) {
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                }
+                // Si uno tiene fecha y el otro no, el que tiene fecha va primero
+                if (a.updated_at && !b.updated_at) return -1;
+                if (!a.updated_at && b.updated_at) return 1;
+                // Si ninguno tiene fecha, mantener el orden original
+                return 0;
             });
+            
+            console.log("Actualizando conversación en reducer:", action.conversation.id, "unread_count:", action.conversation.unread_count);
+            console.log("Conversaciones ordenadas:", sortedConversations.map(c => ({ id: c.id, unread: c.unread_count })));
             
             return {
                 ...state,
