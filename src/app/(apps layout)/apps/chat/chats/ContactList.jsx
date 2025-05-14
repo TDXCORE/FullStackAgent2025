@@ -348,17 +348,30 @@ const ContactList = ({ invitePeople }) => {
                                 <ListGroup.Item 
                                     onClick={() => Conversation(index, elem.id)} 
                                     key={index}
-                                    className={elem.unread > 0 ? "unread-highlight" : ""}
-                                    style={elem.unread > 0 ? {backgroundColor: "rgba(0, 123, 255, 0.15)", borderLeft: "3px solid #007bff"} : {}}
+                                    className={classNames({"unread-highlight": elem.unread > 0})}
+                                    style={elem.unread > 0 ? {
+                                        backgroundColor: "rgba(0, 123, 255, 0.15)", 
+                                        borderLeft: "3px solid #007bff",
+                                        fontWeight: "bold"
+                                    } : {}}
                                 >
                                     <div className={classNames("media", { "active-user": elem.id === states.chatState.userId }, { "read-chat": !elem.unread })}>
                                         <div className="media-head">
-                                            {elem.avatar && <div className="avatar avatar-sm avatar-rounded position-relative">
-                                                <Image src={elem.avatar.src} alt="user" className="avatar-img" />
+                                            {elem.avatar && elem.avatar.src && <div className="avatar avatar-sm avatar-rounded position-relative">
+                                                <Image 
+                                                    src={elem.avatar.src} 
+                                                    alt="user" 
+                                                    className="avatar-img"
+                                                    width={40}
+                                                    height={40}
+                                                />
                                                 {elem.status === "online" && <span className="badge badge-success badge-indicator badge-indicator-lg position-bottom-end-overflow-1" />}
                                             </div>}
                                             {elem.initAvatar && <div className={`avatar avatar-sm avatar-${elem.initAvatar.variant} avatar-rounded`}>
                                                 <span className="initial-wrap">{elem.initAvatar.title}</span>
+                                            </div>}
+                                            {!elem.avatar?.src && !elem.initAvatar && <div className="avatar avatar-sm avatar-soft-primary avatar-rounded">
+                                                <span className="initial-wrap">{elem.name ? elem.name.charAt(0) : 'U'}</span>
                                             </div>}
                                         </div>
                                         <div className="media-body">

@@ -108,7 +108,15 @@ const ChatBody = () => {
             <ul id="dummy_avatar" className="list-unstyled chat-single-list">
                 <li className="media received">
                     <div className="avatar avatar-xs avatar-rounded">
-                        {states.chatState.avatar.type === "img" && <Image src={states.chatState.avatar.src} alt="user" className="avatar-img" />}
+                        {states.chatState.avatar.type === "img" && states.chatState.avatar.src && (
+                            <Image 
+                                src={states.chatState.avatar.src} 
+                                alt="user" 
+                                className="avatar-img" 
+                                width={30} 
+                                height={30}
+                            />
+                        )}
                         {states.chatState.avatar.type === "init" && <div className={`avatar avatar-xs avatar-${states.chatState.avatar.variant} avatar-rounded`}>
                             <span className="initial-wrap">{states.chatState.avatar.title}</span>
                         </div>}
@@ -174,10 +182,23 @@ const ChatBody = () => {
                 </li>
                 <li className="media media-attachment received">
                     <div className="avatar avatar-xs avatar-rounded">
-                        {states.chatState.avatar.type === "img" && <Image src={states.chatState.avatar.src} alt="user" className="avatar-img" />}
+                        {states.chatState.avatar.type === "img" && states.chatState.avatar.src && (
+                            <Image 
+                                src={states.chatState.avatar.src} 
+                                alt="user" 
+                                className="avatar-img" 
+                                width={30} 
+                                height={30}
+                            />
+                        )}
                         {states.chatState.avatar.type === "init" && <div className={`avatar avatar-xs avatar-${states.chatState.avatar.variant} avatar-rounded`}>
                             <span className="initial-wrap">{states.chatState.avatar.title}</span>
                         </div>}
+                        {(!states.chatState.avatar.type || (states.chatState.avatar.type === "img" && !states.chatState.avatar.src)) && (
+                            <div className="avatar avatar-xs avatar-soft-primary avatar-rounded">
+                                <span className="initial-wrap">U</span>
+                            </div>
+                        )}
                     </div>
                     <div className="media-body msg-docs">
                         <div className="msg-box">
@@ -289,10 +310,23 @@ const ChatBody = () => {
                 </li>
                 <li className="media media-attachment received">
                     <div className="avatar avatar-xs avatar-rounded">
-                        {states.chatState.avatar.type === "img" && <Image src={states.chatState.avatar.src} alt="user" className="avatar-img" />}
+                        {states.chatState.avatar.type === "img" && states.chatState.avatar.src && (
+                            <Image 
+                                src={states.chatState.avatar.src} 
+                                alt="user" 
+                                className="avatar-img" 
+                                width={30} 
+                                height={30}
+                            />
+                        )}
                         {states.chatState.avatar.type === "init" && <div className={`avatar avatar-xs avatar-${states.chatState.avatar.variant} avatar-rounded`}>
                             <span className="initial-wrap">{states.chatState.avatar.title}</span>
                         </div>}
+                        {(!states.chatState.avatar.type || (states.chatState.avatar.type === "img" && !states.chatState.avatar.src)) && (
+                            <div className="avatar avatar-xs avatar-soft-primary avatar-rounded">
+                                <span className="initial-wrap">U</span>
+                            </div>
+                        )}
                     </div>
                     <div className="media-body msg-imgs">
                         <div className="msg-box">
@@ -358,10 +392,23 @@ const ChatBody = () => {
                 </li>
                 <li className="media received">
                     <div className="avatar avatar-xs avatar-rounded">
-                        {states.chatState.avatar.type === "img" && <Image src={states.chatState.avatar.src} alt="user" className="avatar-img" />}
+                        {states.chatState.avatar.type === "img" && states.chatState.avatar.src && (
+                            <Image 
+                                src={states.chatState.avatar.src} 
+                                alt="user" 
+                                className="avatar-img" 
+                                width={30} 
+                                height={30}
+                            />
+                        )}
                         {states.chatState.avatar.type === "init" && <div className={`avatar avatar-xs avatar-${states.chatState.avatar.variant} avatar-rounded`}>
                             <span className="initial-wrap">{states.chatState.avatar.title}</span>
                         </div>}
+                        {(!states.chatState.avatar.type || (states.chatState.avatar.type === "img" && !states.chatState.avatar.src)) && (
+                            <div className="avatar avatar-xs avatar-soft-primary avatar-rounded">
+                                <span className="initial-wrap">U</span>
+                            </div>
+                        )}
                     </div>
                     <div className="media-body">
                         <div className="msg-box">
@@ -398,10 +445,23 @@ const ChatBody = () => {
                     messages.map((elem, index) => (
                         <li className={classNames("media", (elem.types))} key={index}>
                             {elem.types === "received" && <div className="avatar avatar-xs avatar-rounded">
-                                {states.chatState.avatar.type === "img" && <Image src={states.chatState.avatar.src} alt="user" className="avatar-img" />}
+                                {states.chatState.avatar.type === "img" && states.chatState.avatar.src && (
+                                    <Image 
+                                        src={states.chatState.avatar.src} 
+                                        alt="user" 
+                                        className="avatar-img" 
+                                        width={30} 
+                                        height={30}
+                                    />
+                                )}
                                 {states.chatState.avatar.type === "init" && <div className={`avatar avatar-xs avatar-${states.chatState.avatar.variant} avatar-rounded`}>
                                     <span className="initial-wrap">{states.chatState.avatar.title}</span>
                                 </div>}
+                                {(!states.chatState.avatar.type || (states.chatState.avatar.type === "img" && !states.chatState.avatar.src)) && (
+                                    <div className="avatar avatar-xs avatar-soft-primary avatar-rounded">
+                                        <span className="initial-wrap">U</span>
+                                    </div>
+                                )}
                             </div>}
                             <div className="media-body">
                                 <div className="msg-box" id="msg-1" >

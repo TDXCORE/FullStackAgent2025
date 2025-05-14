@@ -27,10 +27,11 @@ export const getContacts = async () => {
 export const getConversations = async (userId) => {
   try {
     const response = await axios.get(`${API_URL}/conversations?user_id=${userId}`);
-    return response.data;
+    return response.data || [];
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    throw error;
+    // Devolver un array vacío en lugar de propagar el error
+    return [];
   }
 };
 
@@ -43,14 +44,26 @@ export const getConversations = async (userId) => {
  */
 export const createConversation = async (userId, externalId, platform = 'web') => {
   try {
+    // Validate required parameters
+    if (!userId || !externalId) {
+      console.error('Missing required parameters for creating conversation');
+      throw new Error('User ID and External ID are required');
+    }
+    
     const response = await axios.post(`${API_URL}/conversations`, {
       user_id: userId,
       external_id: externalId,
-      platform
+      platform,
+      status: 'active' // Ensure status is provided
     });
     return response.data;
   } catch (error) {
     console.error('Error creating conversation:', error);
+    // Return a more informative error message
+    if (error.response && error.response.status === 422) {
+      console.error('Validation error:', error.response.data);
+      throw new Error(`Validation error: ${JSON.stringify(error.response.data)}`);
+    }
     throw error;
   }
 };

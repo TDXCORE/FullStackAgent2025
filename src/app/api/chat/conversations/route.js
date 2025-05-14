@@ -16,19 +16,26 @@ export async function GET(request) {
       return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
     }
     
-    // Call the new endpoint
-    const response = await fetch(`${API_URL}?user_id=${user_id}`);
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error fetching conversations:', data);
-      return NextResponse.json({ error: data.error || 'Error fetching conversations' }, { status: response.status });
+    try {
+      // Call the new endpoint
+      const response = await fetch(`${API_URL}?user_id=${user_id}`);
+      
+      // Si la respuesta no es OK, devolver un array vacío en lugar de un error
+      if (!response.ok) {
+        console.error(`Error fetching conversations: ${response.status} ${response.statusText}`);
+        return NextResponse.json([]);
+      }
+      
+      const data = await response.json();
+      return NextResponse.json(data);
+    } catch (fetchError) {
+      console.error('Error fetching from external API:', fetchError);
+      // En caso de error, devolver un array vacío
+      return NextResponse.json([]);
     }
-    
-    return NextResponse.json(data);
   } catch (error) {
     console.error('Error in conversations API:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 

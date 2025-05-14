@@ -192,9 +192,9 @@ const ChatFooter = () => {
                 >
                     <Button 
                         variant={agentEnabled ? "primary" : "outline-secondary"} 
-                        className="btn-icon btn-rounded ms-2"
+                        className={`btn-icon btn-rounded ms-2 ${toggleLoading ? 'opacity-75' : ''}`}
                         onClick={handleToggleAgent}
-                        disabled={toggleLoading}
+                        disabled={toggleLoading || !states.chatState.currentConversationId}
                     >
                         <span className="icon">
                             <span className="feather-icon">
