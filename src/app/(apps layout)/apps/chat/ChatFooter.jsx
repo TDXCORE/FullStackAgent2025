@@ -2,7 +2,7 @@ import HkAlert from '@/components/@hk-alert/@hk-alert';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
 import { useState, useEffect } from 'react';
 import { Button, Dropdown, Form, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { ArrowRight, Share, Smile, Bot } from 'react-feather';
+import { ArrowRight, Share, Smile, Terminal } from 'react-feather';
 import { sendMessage as sendMessageApi, toggleAgent } from '@/services/chatService';
 
 const ChatFooter = () => {
@@ -198,7 +198,7 @@ const ChatFooter = () => {
                     >
                         <span className="icon">
                             <span className="feather-icon">
-                                <Bot />
+                                <Terminal />
                             </span>
                         </span>
                     </Button>
