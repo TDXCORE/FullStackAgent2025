@@ -81,6 +81,7 @@ const ContactList = ({ invitePeople }) => {
     useEffect(() => {
         // Función para obtener todas las conversaciones para todos los contactos
         const fetchAllConversations = async () => {
+            console.log("🔄 Iniciando fetchAllConversations...");
             try {
                 // Si tenemos contactos, obtener conversaciones para cada uno
                 if (states.chatState.contacts && states.chatState.contacts.length > 0) {
@@ -88,6 +89,7 @@ const ContactList = ({ invitePeople }) => {
                     // Esto es temporal, idealmente deberíamos tener un endpoint que devuelva todas las conversaciones
                     const mainUserId = states.chatState.contacts[0].id;
                     console.log(`ContactList: Fetching all conversations using user ID: ${mainUserId}`);
+                    console.log(`Estado actual - Contactos: ${states.chatState.contacts.length}, Conversaciones: ${states.chatState.conversations.length}`);
                     
                     const conversations = await getConversations(mainUserId);
                     
@@ -117,6 +119,10 @@ const ContactList = ({ invitePeople }) => {
                         if (states.chatState.contacts && states.chatState.contacts.length > 0) {
                             // Primero crear un mapa de contactos con sus conversaciones
                             const contactsWithConversations = states.chatState.contacts.map(contact => {
+                                // Agregar logs para depuración
+                                console.log(`Buscando conversación para contacto: ${contact.name} (ID: ${contact.id})`);
+                                console.log(`Conversaciones disponibles:`, sortedConversations.map(c => ({id: c.id.substring(0,8), external_id: c.external_id})));
+
                                 // Buscar si hay una conversación para este contacto
                                 // Primero intentar buscar por external_id exacto
                                 let conversation = sortedConversations.find(
@@ -131,7 +137,22 @@ const ContactList = ({ invitePeople }) => {
                                     );
                                 }
                                 
+                                // Si aún no se encuentra, intentar buscar por nombre de usuario en external_id
+                                // Esto es útil para conversaciones donde el external_id es un número de teléfono
+                                if (!conversation) {
+                                    // Extraer el número de teléfono del nombre si existe (formato: "Usuario XXXXXXXXXX")
+                                    const phoneMatch = contact.name.match(/Usuario\s+(\d+)/);
+                                    if (phoneMatch && phoneMatch[1]) {
+                                        const phoneNumber = phoneMatch[1];
+                                        console.log(`Intentando buscar por número de teléfono: ${phoneNumber}`);
+                                        conversation = sortedConversations.find(
+                                            conv => conv.external_id === phoneNumber
+                                        );
+                                    }
+                                }
+
                                 if (conversation) {
+                                    console.log(`✅ Encontrada conversación para ${contact.name}: ${conversation.id} (unread: ${conversation.unread_count})`);
                                     // Asegurar que unread_count sea un número
                                     const unreadCount = Number(conversation.unread_count || 0);
                                     console.log("Contacto con conversación:", contact.id, "unread:", unreadCount, "external_id:", conversation.external_id);
@@ -171,8 +192,20 @@ const ContactList = ({ invitePeople }) => {
                                 return 0;
                             });
                             
-                            // Actualizar la lista con los contactos ordenados
-                            setList([...sortedContacts]);
+                            // Verificar si hay cambios en la lista antes de actualizarla
+                            const hasChanges = JSON.stringify(sortedContacts) !== JSON.stringify(list);
+                            console.log(`¿Hay cambios en la lista de contactos? ${hasChanges ? 'SÍ' : 'NO'}`);
+                            if (hasChanges) {
+                                console.log("📋 Actualizando lista de contactos:", 
+                                    sortedContacts.map(c => ({
+                                        name: c.name,
+                                        unread: c.unread,
+                                        updated: c.updated_at ? new Date(c.updated_at).toLocaleTimeString() : 'N/A'
+                                    }))
+                                );
+                                // Actualizar la lista con los contactos ordenados
+                                setList([...sortedContacts]);
+                            }
                         }
                     }
                 }
@@ -188,7 +221,7 @@ const ContactList = ({ invitePeople }) => {
         return () => {
             clearInterval(intervalId);
         };
-    }, [states.chatState.userId, dispatch, states.chatState.contacts, sortConversations]);
+    }, [dispatch, states.chatState.contacts, sortConversations]);
 
     const Conversation = async (index, id) => {
         console.log(`Seleccionando conversación para contacto ID: ${id}, índice: ${index}`);
