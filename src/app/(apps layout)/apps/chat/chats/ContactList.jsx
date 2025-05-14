@@ -82,14 +82,29 @@ const ContactList = ({ invitePeople }) => {
         if (states.chatState.userId) {
             const fetchLatestConversations = async () => {
                 try {
+                    console.log(`ContactList: Fetching conversations for user ID: ${states.chatState.userId}`);
                     const conversations = await getConversations(states.chatState.userId);
                     
                     // Verificar que tenemos datos válidos
                     if (conversations && Array.isArray(conversations)) {
+                        console.log(`ContactList: Received ${conversations.length} conversations before sorting`);
+                        
+                        // Verificar los datos de unread_count antes de ordenar
+                        conversations.forEach(conv => {
+                            console.log(`Conversation ${conv.id.substring(0, 8)}: unread_count=${conv.unread_count} (${typeof conv.unread_count})`);
+                        });
+                        
                         // Ordenar conversaciones (no leídas primero)
                         const sortedConversations = sortConversations(conversations);
                         
-                        console.log("Actualizando conversaciones:", sortedConversations);
+                        console.log("ContactList: Actualizando conversaciones ordenadas:", 
+                            sortedConversations.map(c => ({
+                                id: c.id.substring(0, 8),
+                                unread: c.unread_count,
+                                updated: new Date(c.updated_at).toLocaleTimeString()
+                            }))
+                        );
+                        
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
                         
                         // Actualizar la lista de contactos con información de conversaciones

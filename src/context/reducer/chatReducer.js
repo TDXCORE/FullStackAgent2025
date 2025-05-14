@@ -97,10 +97,37 @@ const chatReducer = (state = chatInitialStates, action) => {
                 loading: true
             };
         case "fetch_conversations_success":
+            // Asegurar que unread_count sea un número en todas las conversaciones
+            const normalizedConversations = action.conversations.map(conv => ({
+                ...conv,
+                unread_count: Number(conv.unread_count || 0)
+            }));
+            
+            // Ordenar conversaciones: primero las no leídas, luego por fecha
+            const sortedConversations = [...normalizedConversations].sort((a, b) => {
+                // Primero ordenar por mensajes no leídos (mayor a menor)
+                if (a.unread_count !== b.unread_count) {
+                    return b.unread_count - a.unread_count;
+                }
+                // Luego por fecha de actualización (más reciente primero)
+                if (a.updated_at && b.updated_at) {
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                }
+                return 0;
+            });
+            
+            console.log("chatReducer: Conversaciones ordenadas:", 
+                sortedConversations.map(c => ({
+                    id: c.id.substring(0, 8),
+                    unread: c.unread_count,
+                    updated: c.updated_at ? new Date(c.updated_at).toLocaleTimeString() : 'N/A'
+                }))
+            );
+            
             return {
                 ...state,
                 loading: false,
-                conversations: action.conversations
+                conversations: sortedConversations
             };
         case "fetch_conversations_failure":
             return {
@@ -178,7 +205,7 @@ const chatReducer = (state = chatInitialStates, action) => {
             
             // Ordenar las conversaciones: primero las que tienen mensajes no leídos,
             // luego por fecha de actualización más reciente
-            const sortedConversations = [...updatedConversations].sort((a, b) => {
+            const sortedUpdatedConversations = [...updatedConversations].sort((a, b) => {
                 // Asegurar que unread_count sea un número
                 const aUnread = Number(a.unread_count || 0);
                 const bUnread = Number(b.unread_count || 0);
@@ -201,11 +228,11 @@ const chatReducer = (state = chatInitialStates, action) => {
             });
             
             console.log("Actualizando conversación en reducer:", action.conversation.id, "unread_count:", action.conversation.unread_count);
-            console.log("Conversaciones ordenadas:", sortedConversations.map(c => ({ id: c.id, unread: c.unread_count })));
+            console.log("Conversaciones ordenadas:", sortedUpdatedConversations.map(c => ({ id: c.id, unread: c.unread_count })));
             
             return {
                 ...state,
-                conversations: sortedConversations
+                conversations: sortedUpdatedConversations
             };
             
         default:

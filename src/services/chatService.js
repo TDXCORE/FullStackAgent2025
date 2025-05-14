@@ -26,11 +26,32 @@ export const getContacts = async () => {
  */
 export const getConversations = async (userId) => {
   try {
+    console.log(`Fetching conversations from: ${API_URL}/conversations?user_id=${userId}`);
     const response = await axios.get(`${API_URL}/conversations?user_id=${userId}`);
-    return response.data || [];
+    
+    // Verificar y loguear la respuesta
+    const data = response.data || [];
+    console.log(`Received ${data.length} conversations:`, data);
+    
+    // Verificar si hay datos de unread_count y su tipo
+    if (data.length > 0) {
+      console.log('Sample unread_count:', {
+        value: data[0].unread_count,
+        type: typeof data[0].unread_count
+      });
+    }
+    
+    return data;
   } catch (error) {
     console.error('Error fetching conversations:', error);
+    console.error('Error details:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
     // Devolver un array vacío en lugar de propagar el error
+    // Esto evita que la interfaz se rompa, pero podría ocultar problemas
     return [];
   }
 };
