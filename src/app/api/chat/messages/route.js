@@ -94,30 +94,52 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const body = await request.json();
-    const { id, ...updateData } = body;
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get('path');
+    const conversation_id = searchParams.get('conversation_id');
     
-    if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    // Si el path es 'read', estamos marcando mensajes como leídos
+    if (path === 'read' && conversation_id) {
+      // Llamar al endpoint del backend para marcar mensajes como leídos
+      const response = await fetch(`${API_URL}/read?conversation_id=${conversation_id}`, {
+        method: 'PUT'
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error marking messages as read:', data);
+        return NextResponse.json({ error: data.error || 'Error marking messages as read' }, { status: response.status });
+      }
+      
+      return NextResponse.json(data);
+    } else {
+      // Comportamiento original para actualizar un mensaje
+      const body = await request.json();
+      const { id, ...updateData } = body;
+      
+      if (!id) {
+        return NextResponse.json({ error: 'id is required' }, { status: 400 });
+      }
+      
+      // Call the new endpoint to update a message
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error updating message:', data);
+        return NextResponse.json({ error: data.error || 'Error updating message' }, { status: response.status });
+      }
+      
+      return NextResponse.json(data);
     }
-    
-    // Call the new endpoint to update a message
-    const response = await fetch(`${API_URL}/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updateData),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error updating message:', data);
-      return NextResponse.json({ error: data.error || 'Error updating message' }, { status: response.status });
-    }
-    
-    return NextResponse.json(data);
   } catch (error) {
     console.error('Error in messages API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

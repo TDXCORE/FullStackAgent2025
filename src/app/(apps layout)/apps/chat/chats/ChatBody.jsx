@@ -5,7 +5,7 @@ import { Button, Dropdown } from 'react-bootstrap';
 import { ArrowDown, CornerUpRight, MoreHorizontal } from 'react-feather';
 import SimpleBar from 'simplebar-react';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
-import { getMessages } from '@/services/chatService';
+import { getMessages, markMessagesAsRead } from '@/services/chatService';
 
 //Images
 import giphy from '@/assets/img/giphy.gif'
@@ -47,13 +47,40 @@ const ChatBody = () => {
                     if (JSON.stringify(messagesData) !== JSON.stringify(states.chatState.msg)) {
                         console.log("Nuevos mensajes detectados, actualizando...");
                         dispatch({ type: "update_messages", messages: messagesData });
+                        
+                        // Desplazar automáticamente al último mensaje
+                        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                        
+                        // Si hay mensajes nuevos y la conversación actual tiene mensajes no leídos,
+                        // marcarlos como leídos
+                        const currentConversation = states.chatState.conversations.find(
+                            conv => conv.id === states.chatState.currentConversationId
+                        );
+                        
+                        if (currentConversation && currentConversation.unread_count > 0) {
+                            try {
+                                await markMessagesAsRead(states.chatState.currentConversationId);
+                                
+                                // Actualizar el estado global
+                                dispatch({
+                                    type: "update_conversation",
+                                    conversation: {
+                                        ...currentConversation,
+                                        unread_count: 0
+                                    }
+                                });
+                            } catch (error) {
+                                console.error("Error al marcar mensajes como leídos:", error);
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error("Error en polling de mensajes:", error);
                 }
             };
             
-            // Ejecutar cada 3 segundos
+            // Ejecutar inmediatamente y luego cada 3 segundos
+            fetchLatestMessages();
             const intervalId = setInterval(fetchLatestMessages, 3000);
             
             // Limpiar intervalo al desmontar o cambiar de conversación
@@ -62,7 +89,7 @@ const ChatBody = () => {
                 clearInterval(intervalId);
             };
         }
-    }, [states.chatState.currentConversationId, dispatch, states.chatState.msg]);
+    }, [states.chatState.currentConversationId, dispatch, states.chatState.msg, states.chatState.conversations]);
 
     // Update local messages state when redux state changes
     useEffect(() => {

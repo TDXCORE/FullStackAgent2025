@@ -23,7 +23,8 @@ export const chatInitialStates = {
     error: null,
     contacts: [],
     conversations: [],
-    currentConversationId: null
+    currentConversationId: null,
+    agentEnabled: true
 }
 
 const chatReducer = (state = chatInitialStates, action) => {
@@ -154,6 +155,27 @@ const chatReducer = (state = chatInitialStates, action) => {
             return {
                 ...state,
                 msg: action.messages
+            };
+            
+        case "toggle_agent":
+            return {
+                ...state,
+                agentEnabled: action.enabled,
+                conversations: state.conversations.map(conv => 
+                    conv.id === action.conversationId 
+                        ? { ...conv, agent_enabled: action.enabled } 
+                        : conv
+                )
+            };
+            
+        case "update_conversation":
+            return {
+                ...state,
+                conversations: state.conversations.map(conv => 
+                    conv.id === action.conversation.id 
+                        ? { ...conv, ...action.conversation } 
+                        : conv
+                )
             };
             
         default:

@@ -92,3 +92,37 @@ export const sendMessage = async (conversationId, content, messageType = 'text',
     throw error;
   }
 };
+
+/**
+ * Toggle agent for a conversation
+ * @param {string} conversationId - Conversation ID
+ * @param {boolean} enable - True to enable agent, false to disable
+ * @returns {Promise<Object>} Result of the operation
+ */
+export const toggleAgent = async (conversationId, enable) => {
+  try {
+    const response = await axios.put(`${API_URL}/conversations/agent`, {
+      conversation_id: conversationId,
+      enable
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error toggling agent:', error);
+    throw error;
+  }
+};
+
+/**
+ * Mark all messages in a conversation as read
+ * @param {string} conversationId - Conversation ID
+ * @returns {Promise<Object>} Result of the operation
+ */
+export const markMessagesAsRead = async (conversationId) => {
+  try {
+    const response = await axios.put(`${API_URL}/messages/read?conversation_id=${conversationId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error marking messages as read:', error);
+    throw error;
+  }
+};

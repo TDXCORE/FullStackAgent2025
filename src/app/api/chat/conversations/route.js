@@ -71,30 +71,58 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const body = await request.json();
-    const { id, ...updateData } = body;
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get('path');
     
-    if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    // Si el path es 'agent', estamos manejando el toggle del agente
+    if (path === 'agent') {
+      const body = await request.json();
+      const { conversation_id, enable } = body;
+      
+      if (!conversation_id) {
+        return NextResponse.json({ error: 'conversation_id is required' }, { status: 400 });
+      }
+      
+      // Llamar al endpoint del backend para activar/desactivar el agente
+      const response = await fetch(`${API_URL}/${conversation_id}/agent?enable=${enable}`, {
+        method: 'PUT'
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error toggling agent:', data);
+        return NextResponse.json({ error: data.error || 'Error toggling agent' }, { status: response.status });
+      }
+      
+      return NextResponse.json(data);
+    } else {
+      // Comportamiento original para actualizar una conversación
+      const body = await request.json();
+      const { id, ...updateData } = body;
+      
+      if (!id) {
+        return NextResponse.json({ error: 'id is required' }, { status: 400 });
+      }
+      
+      // Call the new endpoint to update a conversation
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error updating conversation:', data);
+        return NextResponse.json({ error: data.error || 'Error updating conversation' }, { status: response.status });
+      }
+      
+      return NextResponse.json(data);
     }
-    
-    // Call the new endpoint to update a conversation
-    const response = await fetch(`${API_URL}/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updateData),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error updating conversation:', data);
-      return NextResponse.json({ error: data.error || 'Error updating conversation' }, { status: response.status });
-    }
-    
-    return NextResponse.json(data);
   } catch (error) {
     console.error('Error in conversations API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

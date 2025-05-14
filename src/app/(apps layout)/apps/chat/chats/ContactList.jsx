@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import SimpleBar from 'simplebar-react';
 import classNames from 'classnames';
 import * as Icons from 'react-feather';
-import { Dropdown, Form, ListGroup } from 'react-bootstrap';
+import { Dropdown, Form, ListGroup, Badge } from 'react-bootstrap';
 import { useWindowWidth } from '@react-hook/window-size';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
-import { getContacts } from '@/services/chatService';
+import { getContacts, getConversations, markMessagesAsRead } from '@/services/chatService';
 // Keep as fallback
 import defaultContacts from '@/data/chat/contact-list';
 
@@ -25,6 +25,20 @@ const ContactList = ({ invitePeople }) => {
     const width = useWindowWidth();
     const [loading, setLoading] = useState(true);
     
+    // Función para ordenar conversaciones con mensajes no leídos primero
+    const sortConversations = useCallback((conversations) => {
+        if (!conversations || !Array.isArray(conversations)) return [];
+        
+        return [...conversations].sort((a, b) => {
+            // Primero ordenar por mensajes no leídos (mayor a menor)
+            if (a.unread_count !== b.unread_count) {
+                return b.unread_count - a.unread_count;
+            }
+            // Luego por fecha de actualización (más reciente primero)
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+    }, []);
+
     // Fetch contacts on component mount
     useEffect(() => {
         const fetchContacts = async () => {
@@ -45,8 +59,57 @@ const ContactList = ({ invitePeople }) => {
         
         fetchContacts();
     }, [dispatch]);
+    
+    // Polling para actualizar conversaciones periódicamente
+    useEffect(() => {
+        if (states.chatState.userId) {
+            const fetchLatestConversations = async () => {
+                try {
+                    const conversations = await getConversations(states.chatState.userId);
+                    
+                    // Ordenar conversaciones (no leídas primero)
+                    const sortedConversations = sortConversations(conversations);
+                    
+                    // Actualizar el estado global
+                    dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
+                    
+                    // Actualizar la lista de contactos con información de conversaciones
+                    if (states.chatState.contacts && states.chatState.contacts.length > 0) {
+                        const updatedList = states.chatState.contacts.map(contact => {
+                            // Buscar si hay una conversación para este contacto
+                            const conversation = sortedConversations.find(
+                                conv => conv.external_id === contact.id
+                            );
+                            
+                            if (conversation) {
+                                return {
+                                    ...contact,
+                                    unread: conversation.unread_count || 0,
+                                    lastChat: conversation.last_message || "Click to start conversation",
+                                    time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                };
+                            }
+                            return contact;
+                        });
+                        
+                        setList(updatedList);
+                    }
+                } catch (error) {
+                    console.error("Error en polling de conversaciones:", error);
+                }
+            };
+            
+            // Ejecutar inmediatamente y luego cada 3 segundos
+            fetchLatestConversations();
+            const intervalId = setInterval(fetchLatestConversations, 3000);
+            
+            return () => {
+                clearInterval(intervalId);
+            };
+        }
+    }, [states.chatState.userId, dispatch, states.chatState.contacts, sortConversations]);
 
-    const Conversation = (index, id) => {
+    const Conversation = async (index, id) => {
         // Set the selected user
         if (list[index].avatar) {
             dispatch({ 
@@ -66,11 +129,42 @@ const ContactList = ({ invitePeople }) => {
             });
         }
 
-        // Update unread count
-        const updatedContacts = list.map((contactList) =>
-            contactList.id === id ? { ...contactList, unread: 0 } : contactList
+        // Buscar la conversación correspondiente
+        const conversation = states.chatState.conversations.find(
+            conv => conv.external_id === id
         );
-        setList(updatedContacts);
+        
+        if (conversation) {
+            // Establecer la conversación actual
+            dispatch({ 
+                type: "set_current_conversation", 
+                conversationId: conversation.id 
+            });
+            
+            // Si hay mensajes no leídos, marcarlos como leídos
+            if (conversation.unread_count > 0) {
+                try {
+                    await markMessagesAsRead(conversation.id);
+                    
+                    // Actualizar la UI optimistamente
+                    const updatedContacts = list.map((contactList) =>
+                        contactList.id === id ? { ...contactList, unread: 0 } : contactList
+                    );
+                    setList(updatedContacts);
+                    
+                    // Actualizar el estado global
+                    dispatch({
+                        type: "update_conversation",
+                        conversation: {
+                            ...conversation,
+                            unread_count: 0
+                        }
+                    });
+                } catch (error) {
+                    console.error("Error al marcar mensajes como leídos:", error);
+                }
+            }
+        }
 
         // Handle mobile view
         if (width <= 991) {
@@ -245,7 +339,12 @@ const ContactList = ({ invitePeople }) => {
                     <ListGroup variant="flush" className="chat-contacts-list">
                         {
                             list.map((elem, index) => (
-                                <ListGroup.Item onClick={() => Conversation(index, elem.id)} key={index} >
+                                <ListGroup.Item 
+                                    onClick={() => Conversation(index, elem.id)} 
+                                    key={index}
+                                    className={elem.unread > 0 ? "unread-highlight" : ""}
+                                    style={elem.unread > 0 ? {backgroundColor: "rgba(0, 123, 255, 0.1)"} : {}}
+                                >
                                     <div className={classNames("media", { "active-user": elem.id === states.chatState.userId }, { "read-chat": !elem.unread })}>
                                         <div className="media-head">
                                             {elem.avatar && <div className="avatar avatar-sm avatar-rounded position-relative">
@@ -258,7 +357,18 @@ const ContactList = ({ invitePeople }) => {
                                         </div>
                                         <div className="media-body">
                                             <div>
-                                                <div className="user-name">{elem.name}</div>
+                                                <div className="user-name">
+                                                    {elem.name}
+                                                    {elem.unread > 0 && (
+                                                        <Badge 
+                                                            bg="danger" 
+                                                            className="ms-1" 
+                                                            style={{ fontSize: '0.6rem', verticalAlign: 'middle' }}
+                                                        >
+                                                            Nuevo
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <div className="user-last-chat">{elem.lastChat}</div>
                                             </div>
                                             <div>
