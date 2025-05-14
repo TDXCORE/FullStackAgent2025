@@ -85,13 +85,47 @@ const ContactList = ({ invitePeople }) => {
             try {
                 // Si tenemos contactos, obtener conversaciones para cada uno
                 if (states.chatState.contacts && states.chatState.contacts.length > 0) {
-                    // Usar el primer contacto como usuario principal para obtener todas las conversaciones
-                    // Esto es temporal, idealmente deberíamos tener un endpoint que devuelva todas las conversaciones
-                    const mainUserId = states.chatState.contacts[0].id;
-                    console.log(`ContactList: Fetching all conversations using user ID: ${mainUserId}`);
-                    console.log(`Estado actual - Contactos: ${states.chatState.contacts.length}, Conversaciones: ${states.chatState.conversations.length}`);
+                    console.log("🔍 DEBUG: Estado actual de contactos:", 
+                        states.chatState.contacts.map(c => ({
+                            id: c.id.substring(0, 8),
+                            name: c.name
+                        }))
+                    );
                     
-                    const conversations = await getConversations(mainUserId);
+                    console.log(`ContactList: Obteniendo conversaciones para todos los usuarios...`);
+                    let allConversations = [];
+
+                    // Obtener conversaciones para cada usuario (limitado a los primeros 5 para evitar demasiadas solicitudes)
+                    const usersToFetch = states.chatState.contacts.slice(0, 5);
+                    for (const contact of usersToFetch) {
+                        console.log(`Obteniendo conversaciones para usuario: ${contact.name} (ID: ${contact.id})`);
+                        try {
+                            const userConversations = await getConversations(contact.id);
+                            if (userConversations && Array.isArray(userConversations)) {
+                                console.log(`Encontradas ${userConversations.length} conversaciones para ${contact.name}`);
+                                allConversations = [...allConversations, ...userConversations];
+                            }
+                        } catch (error) {
+                            console.error(`Error al obtener conversaciones para ${contact.name}:`, error);
+                        }
+                    }
+
+                    // Eliminar duplicados basados en ID de conversación
+                    const uniqueConversations = Array.from(
+                        new Map(allConversations.map(conv => [conv.id, conv])).values()
+                    );
+                    console.log(`Total de conversaciones únicas encontradas: ${uniqueConversations.length}`);
+
+                    // Usar uniqueConversations en lugar de conversations
+                    const conversations = uniqueConversations;
+                    
+                    console.log("🔍 DEBUG: Todas las conversaciones obtenidas:", 
+                        conversations.map(c => ({
+                            id: c.id.substring(0, 8),
+                            external_id: c.external_id,
+                            unread: c.unread_count
+                        }))
+                    );
                     
                     // Verificar que tenemos datos válidos
                     if (conversations && Array.isArray(conversations)) {
@@ -144,10 +178,24 @@ const ContactList = ({ invitePeople }) => {
                                     const phoneMatch = contact.name.match(/Usuario\s+(\d+)/);
                                     if (phoneMatch && phoneMatch[1]) {
                                         const phoneNumber = phoneMatch[1];
-                                        console.log(`Intentando buscar por número de teléfono: ${phoneNumber}`);
+                                        console.log(`Intentando buscar por número de teléfono exacto: ${phoneNumber}`);
                                         conversation = sortedConversations.find(
                                             conv => conv.external_id === phoneNumber
                                         );
+                                    }
+                                }
+                                
+                                // Si aún no se encuentra, intentar buscar por coincidencia parcial en external_id
+                                if (!conversation) {
+                                    console.log(`Intentando buscar por coincidencia parcial para ${contact.name}`);
+                                    for (const conv of sortedConversations) {
+                                        // Verificar si el external_id contiene alguna parte del nombre del usuario
+                                        if ((contact.name.includes(conv.external_id) || 
+                                            (conv.external_id && conv.external_id.includes(contact.name.replace("Usuario ", ""))))) {
+                                            console.log(`Coincidencia parcial encontrada: ${conv.id} (external_id: ${conv.external_id})`);
+                                            conversation = conv;
+                                            break;
+                                        }
                                     }
                                 }
 
