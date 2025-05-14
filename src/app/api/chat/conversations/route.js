@@ -71,20 +71,20 @@ export async function POST(request) {
 
 export async function PUT(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const path = searchParams.get('path');
+    const url = new URL(request.url);
+    const { pathname, searchParams } = url;
     
-    // Si el path es 'agent', estamos manejando el toggle del agente
-    if (path === 'agent') {
-      const body = await request.json();
-      const { conversation_id, enable } = body;
+    // Verificar si la ruta contiene '/agent'
+    if (pathname.includes('/agent')) {
+      // Extraer el ID de la conversación de la ruta
+      const pathParts = pathname.split('/');
+      const conversationId = pathParts[pathParts.length - 2]; // El ID está antes de '/agent'
+      const enable = searchParams.get('enable') === 'true';
       
-      if (!conversation_id) {
-        return NextResponse.json({ error: 'conversation_id is required' }, { status: 400 });
-      }
+      console.log(`Toggling agent for conversation ${conversationId}, enable: ${enable}`);
       
       // Llamar al endpoint del backend para activar/desactivar el agente
-      const response = await fetch(`${API_URL}/${conversation_id}/agent?enable=${enable}`, {
+      const response = await fetch(`${API_URL.replace('/conversations', '')}/${conversationId}/agent?enable=${enable}`, {
         method: 'PUT'
       });
       

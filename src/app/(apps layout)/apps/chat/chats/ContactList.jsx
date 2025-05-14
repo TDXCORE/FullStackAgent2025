@@ -67,32 +67,38 @@ const ContactList = ({ invitePeople }) => {
                 try {
                     const conversations = await getConversations(states.chatState.userId);
                     
-                    // Ordenar conversaciones (no leídas primero)
-                    const sortedConversations = sortConversations(conversations);
-                    
-                    // Actualizar el estado global
-                    dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
-                    
-                    // Actualizar la lista de contactos con información de conversaciones
-                    if (states.chatState.contacts && states.chatState.contacts.length > 0) {
-                        const updatedList = states.chatState.contacts.map(contact => {
-                            // Buscar si hay una conversación para este contacto
-                            const conversation = sortedConversations.find(
-                                conv => conv.external_id === contact.id
-                            );
-                            
-                            if (conversation) {
-                                return {
-                                    ...contact,
-                                    unread: conversation.unread_count || 0,
-                                    lastChat: conversation.last_message || "Click to start conversation",
-                                    time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                                };
-                            }
-                            return contact;
-                        });
+                    // Verificar que tenemos datos válidos
+                    if (conversations && Array.isArray(conversations)) {
+                        // Ordenar conversaciones (no leídas primero)
+                        const sortedConversations = sortConversations(conversations);
                         
-                        setList(updatedList);
+                        // Actualizar el estado global con un console.log para depuración
+                        console.log("Actualizando conversaciones:", sortedConversations);
+                        dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
+                        
+                        // Actualizar la lista de contactos con información de conversaciones
+                        if (states.chatState.contacts && states.chatState.contacts.length > 0) {
+                            const updatedList = states.chatState.contacts.map(contact => {
+                                // Buscar si hay una conversación para este contacto
+                                const conversation = sortedConversations.find(
+                                    conv => conv.external_id === contact.id
+                                );
+                                
+                                if (conversation) {
+                                    console.log("Contacto con conversación:", contact.id, "unread:", conversation.unread_count);
+                                    return {
+                                        ...contact,
+                                        unread: conversation.unread_count || 0,
+                                        lastChat: conversation.last_message || "Click to start conversation",
+                                        time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                    };
+                                }
+                                return contact;
+                            });
+                            
+                            // Forzar actualización de la lista
+                            setList([...updatedList]);
+                        }
                     }
                 } catch (error) {
                     console.error("Error en polling de conversaciones:", error);
@@ -343,7 +349,7 @@ const ContactList = ({ invitePeople }) => {
                                     onClick={() => Conversation(index, elem.id)} 
                                     key={index}
                                     className={elem.unread > 0 ? "unread-highlight" : ""}
-                                    style={elem.unread > 0 ? {backgroundColor: "rgba(0, 123, 255, 0.1)"} : {}}
+                                    style={elem.unread > 0 ? {backgroundColor: "rgba(0, 123, 255, 0.15)", borderLeft: "3px solid #007bff"} : {}}
                                 >
                                     <div className={classNames("media", { "active-user": elem.id === states.chatState.userId }, { "read-chat": !elem.unread })}>
                                         <div className="media-head">

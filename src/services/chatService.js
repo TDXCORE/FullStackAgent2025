@@ -101,10 +101,9 @@ export const sendMessage = async (conversationId, content, messageType = 'text',
  */
 export const toggleAgent = async (conversationId, enable) => {
   try {
-    const response = await axios.put(`${API_URL}/conversations/agent`, {
-      conversation_id: conversationId,
-      enable
-    });
+    // Cambiar a usar parámetros de consulta en lugar de un cuerpo JSON
+    const response = await axios.put(`${API_URL}/conversations/${conversationId}/agent?enable=${enable}`);
+    console.log('Toggle agent response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error toggling agent:', error);
