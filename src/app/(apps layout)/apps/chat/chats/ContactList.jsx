@@ -149,95 +149,33 @@ const ContactList = ({ invitePeople }) => {
                         
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
                         
-                        // Asegurar que todas las conversaciones se muestren en la lista
-                        // Crear contactos virtuales para conversaciones sin contacto asociado
+                        // SOLUCIÓN: Mostrar todas las conversaciones directamente
+                        // Crear una lista de contactos a partir de las conversaciones
                         let contactsWithConversations = [];
-                        let processedConversationIds = new Set();
-
-                        // Primero, procesar los contactos existentes
-                        if (states.chatState.contacts && states.chatState.contacts.length > 0) {
-                            contactsWithConversations = states.chatState.contacts.map(contact => {
-                                // Agregar logs para depuración
-                                console.log(`Buscando conversación para contacto: ${contact.name} (ID: ${contact.id})`);
-                                console.log(`Conversaciones disponibles:`, sortedConversations.map(c => ({id: c.id.substring(0,8), external_id: c.external_id})));
-
-                                // Buscar si hay una conversación para este contacto
-                                // Primero intentar buscar por external_id exacto
-                                let conversation = sortedConversations.find(
-                                    conv => conv.external_id === contact.id
-                                );
-                                
-                                // Si no se encuentra, intentar buscar por external_id que contenga el ID del contacto
-                                // Esto es útil para conversaciones web donde el external_id puede ser "web-timestamp"
-                                if (!conversation) {
-                                    conversation = sortedConversations.find(
-                                        conv => conv.external_id.includes(contact.id)
-                                    );
-                                }
-                                
-                                // Si aún no se encuentra, intentar buscar por nombre de usuario en external_id
-                                // Esto es útil para conversaciones donde el external_id es un número de teléfono
-                                if (!conversation) {
-                                    // Extraer el número de teléfono del nombre si existe (formato: "Usuario XXXXXXXXXX")
-                                    const phoneMatch = contact.name.match(/Usuario\s+(\d+)/);
-                                    if (phoneMatch && phoneMatch[1]) {
-                                        const phoneNumber = phoneMatch[1];
-                                        console.log(`Intentando buscar por número de teléfono exacto: ${phoneNumber}`);
-                                        conversation = sortedConversations.find(
-                                            conv => conv.external_id === phoneNumber
-                                        );
-                                    }
-                                }
-                                
-                                // Si aún no se encuentra, intentar buscar por coincidencia parcial en external_id
-                                if (!conversation) {
-                                    console.log(`Intentando buscar por coincidencia parcial para ${contact.name}`);
-                                    for (const conv of sortedConversations) {
-                                        // Verificar si el external_id contiene alguna parte del nombre del usuario
-                                        if ((contact.name.includes(conv.external_id) || 
-                                            (conv.external_id && conv.external_id.includes(contact.name.replace("Usuario ", ""))))) {
-                                            console.log(`Coincidencia parcial encontrada: ${conv.id} (external_id: ${conv.external_id})`);
-                                            conversation = conv;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if (conversation) {
-                                    console.log(`✅ Encontrada conversación para ${contact.name}: ${conversation.id} (unread: ${conversation.unread_count})`);
-                                    // Asegurar que unread_count sea un número
-                                    const unreadCount = Number(conversation.unread_count || 0);
-                                    console.log("Contacto con conversación:", contact.id, "unread:", unreadCount, "external_id:", conversation.external_id);
-                                    
-                                    // Marcar esta conversación como procesada
-                                    processedConversationIds.add(conversation.id);
-                                    
-                                    return {
-                                        ...contact,
-                                        unread: unreadCount,
-                                        lastChat: conversation.last_message || "Click to start conversation",
-                                        time: new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                                        conversationId: conversation.id,
-                                        updated_at: conversation.updated_at
-                                    };
-                                }
-                                return {
-                                    ...contact,
-                                    unread: 0,
-                                    lastChat: "Click to start conversation",
-                                    time: "",
-                                    updated_at: null
-                                };
-                            });
-                        }
-
-                        // Luego, agregar conversaciones que no tienen contacto asociado
+                        
+                        // Convertir todas las conversaciones en contactos para mostrarlos en la lista
                         sortedConversations.forEach(conv => {
-                            if (!processedConversationIds.has(conv.id)) {
-                                // Crear un contacto virtual para esta conversación
+                            // Buscar si ya existe un contacto para esta conversación
+                            const existingContact = states.chatState.contacts.find(contact => 
+                                contact.id === conv.external_id || 
+                                (conv.external_id && conv.external_id.includes(contact.id))
+                            );
+                            
+                            if (existingContact) {
+                                // Si existe un contacto, usar su información
+                                contactsWithConversations.push({
+                                    ...existingContact,
+                                    unread: Number(conv.unread_count || 0),
+                                    lastChat: conv.last_message || "Click to start conversation",
+                                    time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                                    conversationId: conv.id,
+                                    updated_at: conv.updated_at
+                                });
+                            } else {
+                                // Si no existe un contacto, crear uno virtual
                                 contactsWithConversations.push({
                                     id: conv.external_id || `virtual-${conv.id}`,
-                                    name: `Chat ${conv.external_id || conv.id.substring(0, 8)}`,
+                                    name: `Usuario ${conv.external_id || conv.id.substring(0, 8)}`,
                                     unread: Number(conv.unread_count || 0),
                                     lastChat: conv.last_message || "Click to start conversation",
                                     time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
@@ -246,7 +184,7 @@ const ContactList = ({ invitePeople }) => {
                                     // Usar un avatar genérico
                                     initAvatar: {
                                         variant: 'soft-primary',
-                                        title: (conv.external_id || 'C').charAt(0).toUpperCase()
+                                        title: (conv.external_id || 'U').charAt(0).toUpperCase()
                                     }
                                 });
                             }
