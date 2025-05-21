@@ -7,7 +7,7 @@ import * as Icons from 'react-feather';
 import { Dropdown, Form, ListGroup, Badge } from 'react-bootstrap';
 import { useWindowWidth } from '@react-hook/window-size';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
-import { getContacts, getConversations, markMessagesAsRead } from '@/services/chatService';
+import { getContacts, getConversations, markMessagesAsRead, wsClient } from '@/services/chatService';
 // Keep as fallback
 import defaultContacts from '@/data/chat/contact-list';
 
@@ -77,7 +77,7 @@ const ContactList = ({ invitePeople }) => {
         fetchContacts();
     }, [dispatch]);
     
-    // Polling para actualizar conversaciones periódicamente
+    // Cargar conversaciones iniciales y configurar para actualizaciones en tiempo real
     useEffect(() => {
         // Función para obtener todas las conversaciones para todos los contactos
         const fetchAllConversations = async () => {
@@ -119,123 +119,95 @@ const ContactList = ({ invitePeople }) => {
                     // Usar uniqueConversations en lugar de conversations
                     const conversations = uniqueConversations;
                     
-                    console.log("🔍 DEBUG: Todas las conversaciones obtenidas:", 
-                        conversations.map(c => ({
-                            id: c.id.substring(0, 8),
-                            external_id: c.external_id,
-                            unread: c.unread_count
-                        }))
-                    );
-                    
                     // Verificar que tenemos datos válidos
                     if (conversations && Array.isArray(conversations)) {
-                        console.log(`ContactList: Received ${conversations.length} conversations before sorting`);
-                        
-                        // Verificar los datos de unread_count antes de ordenar
-                        conversations.forEach(conv => {
-                            console.log(`Conversation ${conv.id.substring(0, 8)}: unread_count=${conv.unread_count} (${typeof conv.unread_count})`);
-                        });
-                        
                         // Ordenar conversaciones (no leídas primero)
                         const sortedConversations = sortConversations(conversations);
                         
-                        console.log("ContactList: Actualizando conversaciones ordenadas:", 
-                            sortedConversations.map(c => ({
-                                id: c.id.substring(0, 8),
-                                unread: c.unread_count,
-                                updated: new Date(c.updated_at).toLocaleTimeString()
-                            }))
-                        );
-                        
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
-                        
-                        // SOLUCIÓN: Mostrar todas las conversaciones directamente
-                        // Crear una lista de contactos a partir de las conversaciones
-                        let contactsWithConversations = [];
-                        
-                        // Convertir todas las conversaciones en contactos para mostrarlos en la lista
-                        sortedConversations.forEach(conv => {
-                            // Buscar si ya existe un contacto para esta conversación
-                            const existingContact = states.chatState.contacts.find(contact => 
-                                contact.id === conv.external_id || 
-                                (conv.external_id && conv.external_id.includes(contact.id))
-                            );
-                            
-                            if (existingContact) {
-                                // Si existe un contacto, usar su información
-                                contactsWithConversations.push({
-                                    ...existingContact,
-                                    unread: Number(conv.unread_count || 0),
-                                    lastChat: conv.last_message || "Click to start conversation",
-                                    time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                                    conversationId: conv.id,
-                                    updated_at: conv.updated_at
-                                });
-                            } else {
-                                // Si no existe un contacto, crear uno virtual
-                                contactsWithConversations.push({
-                                    id: conv.external_id || `virtual-${conv.id}`,
-                                    name: `Usuario ${conv.external_id || conv.id.substring(0, 8)}`,
-                                    unread: Number(conv.unread_count || 0),
-                                    lastChat: conv.last_message || "Click to start conversation",
-                                    time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                                    conversationId: conv.id,
-                                    updated_at: conv.updated_at,
-                                    // Usar un avatar genérico
-                                    initAvatar: {
-                                        variant: 'soft-primary',
-                                        title: (conv.external_id || 'U').charAt(0).toUpperCase()
-                                    }
-                                });
-                            }
-                        });
-                            
-                        // Ordenar todos los contactos (incluyendo los virtuales)
-                        const sortedContacts = [...contactsWithConversations].sort((a, b) => {
-                            // Primero ordenar por mensajes no leídos (mayor a menor)
-                            if ((a.unread || 0) !== (b.unread || 0)) {
-                                return (b.unread || 0) - (a.unread || 0);
-                            }
-                            // Luego por fecha de actualización (más reciente primero)
-                            if (a.updated_at && b.updated_at) {
-                                return new Date(b.updated_at) - new Date(a.updated_at);
-                            }
-                            // Si uno tiene fecha y el otro no, el que tiene fecha va primero
-                            if (a.updated_at && !b.updated_at) return -1;
-                            if (!a.updated_at && b.updated_at) return 1;
-                            // Si ninguno tiene fecha, mantener el orden original
-                            return 0;
-                        });
-                        
-                        // Verificar si hay cambios en la lista antes de actualizarla
-                        const hasChanges = JSON.stringify(sortedContacts) !== JSON.stringify(list);
-                        console.log(`¿Hay cambios en la lista de contactos? ${hasChanges ? 'SÍ' : 'NO'}`);
-                        if (hasChanges) {
-                            console.log("📋 Actualizando lista de contactos:", 
-                                sortedContacts.map(c => ({
-                                    name: c.name,
-                                    unread: c.unread,
-                                    updated: c.updated_at ? new Date(c.updated_at).toLocaleTimeString() : 'N/A'
-                                }))
-                            );
-                            // Actualizar la lista con los contactos ordenados
-                            setList([...sortedContacts]);
-                        }
                     }
                 }
             } catch (error) {
-                console.error("Error en polling de conversaciones:", error);
+                console.error("Error al obtener conversaciones:", error);
             }
         };
         
-        // Ejecutar inmediatamente y luego cada 5 segundos (para reducir la carga)
+        // Ejecutar una vez al cargar el componente
         fetchAllConversations();
-        const intervalId = setInterval(fetchAllConversations, 5000);
         
-        return () => {
-            clearInterval(intervalId);
-        };
     }, [dispatch, states.chatState.contacts, sortConversations]);
+    
+    // Actualizar la lista de contactos cuando cambian las conversaciones
+    useEffect(() => {
+        if (states.chatState.conversations && states.chatState.conversations.length > 0 && 
+            states.chatState.contacts && states.chatState.contacts.length > 0) {
+            
+            // Crear una lista de contactos a partir de las conversaciones
+            let contactsWithConversations = [];
+            
+            // Convertir todas las conversaciones en contactos para mostrarlos en la lista
+            states.chatState.conversations.forEach(conv => {
+                // Buscar si ya existe un contacto para esta conversación
+                const existingContact = states.chatState.contacts.find(contact => 
+                    contact.id === conv.external_id || 
+                    (conv.external_id && conv.external_id.includes(contact.id))
+                );
+                
+                if (existingContact) {
+                    // Si existe un contacto, usar su información
+                    contactsWithConversations.push({
+                        ...existingContact,
+                        unread: Number(conv.unread_count || 0),
+                        lastChat: conv.last_message || "Click to start conversation",
+                        time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        conversationId: conv.id,
+                        updated_at: conv.updated_at
+                    });
+                } else {
+                    // Si no existe un contacto, crear uno virtual
+                    contactsWithConversations.push({
+                        id: conv.external_id || `virtual-${conv.id}`,
+                        name: `Usuario ${conv.external_id || conv.id.substring(0, 8)}`,
+                        unread: Number(conv.unread_count || 0),
+                        lastChat: conv.last_message || "Click to start conversation",
+                        time: new Date(conv.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        conversationId: conv.id,
+                        updated_at: conv.updated_at,
+                        // Usar un avatar genérico
+                        initAvatar: {
+                            variant: 'soft-primary',
+                            title: (conv.external_id || 'U').charAt(0).toUpperCase()
+                        }
+                    });
+                }
+            });
+                
+            // Ordenar todos los contactos (incluyendo los virtuales)
+            const sortedContacts = [...contactsWithConversations].sort((a, b) => {
+                // Primero ordenar por mensajes no leídos (mayor a menor)
+                if ((a.unread || 0) !== (b.unread || 0)) {
+                    return (b.unread || 0) - (a.unread || 0);
+                }
+                // Luego por fecha de actualización (más reciente primero)
+                if (a.updated_at && b.updated_at) {
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                }
+                // Si uno tiene fecha y el otro no, el que tiene fecha va primero
+                if (a.updated_at && !b.updated_at) return -1;
+                if (!a.updated_at && b.updated_at) return 1;
+                // Si ninguno tiene fecha, mantener el orden original
+                return 0;
+            });
+            
+            // Verificar si hay cambios en la lista antes de actualizarla
+            const hasChanges = JSON.stringify(sortedContacts) !== JSON.stringify(list);
+            if (hasChanges) {
+                console.log("📋 Actualizando lista de contactos con datos de WebSocket");
+                // Actualizar la lista con los contactos ordenados
+                setList([...sortedContacts]);
+            }
+        }
+    }, [states.chatState.conversations, states.chatState.contacts, list]);
 
     const Conversation = async (index, id) => {
         console.log(`Seleccionando conversación para contacto ID: ${id}, índice: ${index}`);

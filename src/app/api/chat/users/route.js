@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { wsClient } from '@/services/chatService';
 
 // Configuración estática para compatibilidad con exportación estática
 export const dynamic = 'force-static';
@@ -8,32 +9,58 @@ const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waagentv1.on
 
 export async function GET() {
   try {
-    // Call the new endpoint
-    const response = await fetch(API_URL);
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error fetching users:', data);
-      return NextResponse.json({ error: data.error || 'Error fetching users' }, { status: response.status });
+    try {
+      // Intentar usar WebSocket primero
+      await wsClient.connect();
+      const result = await wsClient.getUsers();
+      
+      // Transformar datos para mantener compatibilidad con el formato actual
+      const contacts = result.users.map(user => ({
+        id: user.id,
+        name: user.full_name,
+        // Generate avatar data (since it's not in the schema)
+        avatar: {
+          type: "init",
+          variant: "primary", // Can randomize this based on user.id
+          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
+        },
+        status: "offline", // Default status
+        lastChat: "Click to start conversation",
+        time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        unread: 0
+      }));
+      
+      return NextResponse.json(contacts);
+    } catch (wsError) {
+      console.error('Error fetching users via WebSocket:', wsError);
+      
+      // Fallback a REST API si WebSocket falla
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error fetching users:', data);
+        return NextResponse.json({ error: data.error || 'Error fetching users' }, { status: response.status });
+      }
+      
+      // Transform data for frontend
+      const contacts = data.map(user => ({
+        id: user.id,
+        name: user.full_name,
+        // Generate avatar data (since it's not in the schema)
+        avatar: {
+          type: "init",
+          variant: "primary", // Can randomize this based on user.id
+          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
+        },
+        status: "offline", // Default status
+        lastChat: "Click to start conversation",
+        time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        unread: 0
+      }));
+      
+      return NextResponse.json(contacts);
     }
-    
-    // Transform data for frontend
-    const contacts = data.map(user => ({
-      id: user.id,
-      name: user.full_name,
-      // Generate avatar data (since it's not in the schema)
-      avatar: {
-        type: "init",
-        variant: "primary", // Can randomize this based on user.id
-        title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
-      },
-      status: "offline", // Default status
-      lastChat: "Click to start conversation",
-      time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      unread: 0
-    }));
-    
-    return NextResponse.json(contacts);
   } catch (error) {
     console.error('Error in users API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

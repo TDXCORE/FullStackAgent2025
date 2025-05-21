@@ -24,7 +24,10 @@ export const chatInitialStates = {
     contacts: [],
     conversations: [],
     currentConversationId: null,
-    agentEnabled: true
+    agentEnabled: true,
+    // WebSocket states
+    wsConnected: false,
+    wsClientId: null
 }
 
 const chatReducer = (state = chatInitialStates, action) => {
@@ -233,6 +236,135 @@ const chatReducer = (state = chatInitialStates, action) => {
             return {
                 ...state,
                 conversations: sortedUpdatedConversations
+            };
+            
+        // WebSocket event handlers
+        case "ws_connected":
+            return {
+                ...state,
+                wsConnected: true,
+                wsClientId: action.payload.client_id
+            };
+            
+        case "ws_disconnected":
+            return {
+                ...state,
+                wsConnected: false
+            };
+            
+        case "ws_new_message":
+            // Si el mensaje pertenece a la conversación actual, añadirlo a los mensajes
+            if (action.payload.message.conversation_id === state.currentConversationId) {
+                const newMessage = {
+                    id: action.payload.message.id,
+                    types: action.payload.message.role === 'user' ? 'sent' : 'received',
+                    text: action.payload.message.content,
+                    time: new Date(action.payload.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    message_type: action.payload.message.message_type || 'text',
+                    media_url: action.payload.message.media_url
+                };
+                
+                return {
+                    ...state,
+                    msg: [...state.msg, newMessage]
+                };
+            }
+            
+            // Actualizar el contador de mensajes no leídos para la conversación
+            const updatedConversationsWithNewMessage = state.conversations.map(conv => 
+                conv.id === action.payload.message.conversation_id
+                    ? { 
+                        ...conv, 
+                        unread_count: (Number(conv.unread_count) || 0) + 1,
+                        last_message: action.payload.message.content,
+                        updated_at: action.payload.message.created_at
+                      }
+                    : conv
+            );
+            
+            // Ordenar las conversaciones: primero las que tienen mensajes no leídos
+            const sortedConversationsWithNewMessage = [...updatedConversationsWithNewMessage].sort((a, b) => {
+                // Asegurar que unread_count sea un número
+                const aUnread = Number(a.unread_count || 0);
+                const bUnread = Number(b.unread_count || 0);
+                
+                // Primero ordenar por mensajes no leídos (mayor a menor)
+                if (aUnread !== bUnread) {
+                    return bUnread - aUnread;
+                }
+                // Luego por fecha de actualización (más reciente primero)
+                if (a.updated_at && b.updated_at) {
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                }
+                return 0;
+            });
+            
+            return {
+                ...state,
+                conversations: sortedConversationsWithNewMessage
+            };
+            
+        case "ws_message_deleted":
+            return {
+                ...state,
+                msg: state.msg.filter(m => m.id !== action.payload.message_id)
+            };
+            
+        case "ws_conversation_updated":
+            // Actualizar la conversación específica
+            const updatedConversationsFromWS = state.conversations.map(conv => 
+                conv.id === action.payload.conversation.id
+                    ? { ...conv, ...action.payload.conversation }
+                    : conv
+            );
+            
+            // Ordenar las conversaciones
+            const sortedUpdatedConversationsFromWS = [...updatedConversationsFromWS].sort((a, b) => {
+                const aUnread = Number(a.unread_count || 0);
+                const bUnread = Number(b.unread_count || 0);
+                
+                // Primero ordenar por mensajes no leídos (mayor a menor)
+                if (aUnread !== bUnread) {
+                    return bUnread - aUnread;
+                }
+                // Luego por fecha de actualización (más reciente primero)
+                if (a.updated_at && b.updated_at) {
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                }
+                return 0;
+            });
+            
+            return {
+                ...state,
+                conversations: sortedUpdatedConversationsFromWS
+            };
+            
+        case "ws_conversation_created":
+            // Añadir la nueva conversación al principio de la lista
+            return {
+                ...state,
+                conversations: [
+                    {
+                        ...action.payload.conversation,
+                        unread_count: Number(action.payload.conversation.unread_count || 0)
+                    },
+                    ...state.conversations
+                ]
+            };
+            
+        case "ws_user_updated":
+            // Actualizar el usuario en la lista de contactos
+            return {
+                ...state,
+                contacts: state.contacts.map(contact => 
+                    contact.id === action.payload.user.id
+                        ? { 
+                            ...contact, 
+                            name: action.payload.user.full_name,
+                            // Actualizar otros campos según sea necesario
+                          }
+                        : contact
+                )
             };
             
         default:

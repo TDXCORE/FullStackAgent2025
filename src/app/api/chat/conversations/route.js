@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { wsClient } from '@/services/chatService';
 
 // Configuración estática para compatibilidad con exportación estática
 export const dynamic = 'force-static';
@@ -17,17 +18,26 @@ export async function GET(request) {
     }
     
     try {
-      // Call the new endpoint
-      const response = await fetch(`${API_URL}?user_id=${user_id}`);
-      
-      // Si la respuesta no es OK, devolver un array vacío en lugar de un error
-      if (!response.ok) {
-        console.error(`Error fetching conversations: ${response.status} ${response.statusText}`);
-        return NextResponse.json([]);
+      // Intentar usar WebSocket primero
+      try {
+        await wsClient.connect();
+        const result = await wsClient.getConversations(user_id);
+        return NextResponse.json(result.conversations || []);
+      } catch (wsError) {
+        console.error('Error fetching conversations via WebSocket:', wsError);
+        
+        // Fallback a REST API si WebSocket falla
+        const response = await fetch(`${API_URL}?user_id=${user_id}`);
+        
+        // Si la respuesta no es OK, devolver un array vacío en lugar de un error
+        if (!response.ok) {
+          console.error(`Error fetching conversations: ${response.status} ${response.statusText}`);
+          return NextResponse.json([]);
+        }
+        
+        const data = await response.json();
+        return NextResponse.json(data);
       }
-      
-      const data = await response.json();
-      return NextResponse.json(data);
     } catch (fetchError) {
       console.error('Error fetching from external API:', fetchError);
       // En caso de error, devolver un array vacío
@@ -48,28 +58,43 @@ export async function POST(request) {
       return NextResponse.json({ error: 'user_id and external_id are required' }, { status: 400 });
     }
     
-    // Call the new endpoint to create a conversation
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        user_id,
+    try {
+      // Intentar usar WebSocket primero
+      await wsClient.connect();
+      const result = await wsClient.createConversation({
+        created_by: user_id,
         external_id,
         platform,
         status: 'active'
-      }),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error creating conversation:', data);
-      return NextResponse.json({ error: data.error || 'Error creating conversation' }, { status: response.status });
+      });
+      
+      return NextResponse.json(result.conversation, { status: 201 });
+    } catch (wsError) {
+      console.error('Error creating conversation via WebSocket:', wsError);
+      
+      // Fallback a REST API si WebSocket falla
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id,
+          external_id,
+          platform,
+          status: 'active'
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error creating conversation:', data);
+        return NextResponse.json({ error: data.error || 'Error creating conversation' }, { status: response.status });
+      }
+      
+      return NextResponse.json(data, { status: 201 });
     }
-    
-    return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error('Error in conversations API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

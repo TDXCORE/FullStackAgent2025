@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { wsClient } from '@/services/chatService';
 
 // Configuración estática para compatibilidad con exportación estática
 export const dynamic = 'force-static';
@@ -16,29 +17,48 @@ export async function GET(request) {
       return NextResponse.json({ error: 'conversation_id is required' }, { status: 400 });
     }
     
-    // Call the new endpoint
-    const response = await fetch(`${API_URL}?conversation_id=${conversation_id}`);
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error fetching messages:', data);
-      return NextResponse.json({ error: data.error || 'Error fetching messages' }, { status: response.status });
+    try {
+      // Intentar usar WebSocket primero
+      await wsClient.connect();
+      const result = await wsClient.getMessages(conversation_id);
+      
+      // Transformar mensajes al formato esperado por el frontend
+      const messages = result.messages.map(message => ({
+        id: message.id,
+        types: message.role === 'user' ? 'sent' : 'received',
+        text: message.content,
+        time: new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        message_type: message.message_type || 'text',
+        media_url: message.media_url,
+        read: message.read // Include read status from backend
+      }));
+      
+      return NextResponse.json(messages);
+    } catch (wsError) {
+      console.error('Error fetching messages via WebSocket:', wsError);
+      
+      // Fallback a REST API si WebSocket falla
+      const response = await fetch(`${API_URL}?conversation_id=${conversation_id}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error fetching messages:', data);
+        return NextResponse.json({ error: data.error || 'Error fetching messages' }, { status: response.status });
+      }
+      
+      // Transform data for frontend if needed
+      const messages = data.map(message => ({
+        id: message.id,
+        types: message.role === 'user' ? 'sent' : 'received',
+        text: message.content,
+        time: new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        message_type: message.message_type || 'text',
+        media_url: message.media_url,
+        read: message.read
+      }));
+      
+      return NextResponse.json(messages);
     }
-    
-    // Transform data for frontend if needed
-    // This assumes the API returns data in a format that needs transformation
-    // If the API already returns data in the expected format, this can be simplified
-    const messages = data.map(message => ({
-      id: message.id,
-      types: message.role === 'user' ? 'sent' : 'received',
-      text: message.content,
-      time: new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      message_type: message.message_type,
-      media_url: message.media_url,
-      read: message.read // Include read status from backend
-    }));
-    
-    return NextResponse.json(messages);
   } catch (error) {
     console.error('Error in messages API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -54,39 +74,59 @@ export async function POST(request) {
       return NextResponse.json({ error: 'conversation_id and content are required' }, { status: 400 });
     }
     
-    // Call the new endpoint to create a message
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        conversation_id,
-        role: 'user', // Messages from the web interface are always from the user
-        content,
-        message_type,
-        media_url
-      }),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Error creating message:', data);
-      return NextResponse.json({ error: data.error || 'Error creating message' }, { status: response.status });
+    try {
+      // Intentar usar WebSocket primero
+      await wsClient.connect();
+      const result = await wsClient.sendMessage(conversation_id, content, 'user', message_type, media_url);
+      
+      // Transformar al formato esperado por el frontend
+      const message = {
+        id: result.message.id,
+        types: 'sent',
+        text: result.message.content,
+        time: new Date(result.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        message_type: result.message.message_type || 'text',
+        media_url: result.message.media_url
+      };
+      
+      return NextResponse.json(message, { status: 201 });
+    } catch (wsError) {
+      console.error('Error sending message via WebSocket:', wsError);
+      
+      // Fallback a REST API si WebSocket falla
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation_id,
+          role: 'user', // Messages from the web interface are always from the user
+          content,
+          message_type,
+          media_url
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error creating message:', data);
+        return NextResponse.json({ error: data.error || 'Error creating message' }, { status: response.status });
+      }
+      
+      // Transform for frontend if needed
+      const message = {
+        id: data.id,
+        types: 'sent',
+        text: data.content,
+        time: new Date(data.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        message_type: data.message_type || 'text',
+        media_url: data.media_url
+      };
+      
+      return NextResponse.json(message, { status: 201 });
     }
-    
-    // Transform for frontend if needed
-    const message = {
-      id: data.id,
-      types: 'sent',
-      text: data.content,
-      time: new Date(data.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      message_type: data.message_type,
-      media_url: data.media_url
-    };
-    
-    return NextResponse.json(message, { status: 201 });
   } catch (error) {
     console.error('Error in messages API:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -101,19 +141,28 @@ export async function PUT(request) {
     
     // Si el path es 'read', estamos marcando mensajes como leídos
     if (path === 'read' && conversation_id) {
-      // Llamar al endpoint del backend para marcar mensajes como leídos
-      const response = await fetch(`${API_URL}/read?conversation_id=${conversation_id}`, {
-        method: 'PUT'
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('Error marking messages as read:', data);
-        return NextResponse.json({ error: data.error || 'Error marking messages as read' }, { status: response.status });
+      try {
+        // Intentar usar WebSocket primero
+        await wsClient.connect();
+        const result = await wsClient.markMessagesAsRead(conversation_id);
+        return NextResponse.json(result);
+      } catch (wsError) {
+        console.error('Error marking messages as read via WebSocket:', wsError);
+        
+        // Fallback a REST API si WebSocket falla
+        const response = await fetch(`${API_URL}/read?conversation_id=${conversation_id}`, {
+          method: 'PUT'
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('Error marking messages as read:', data);
+          return NextResponse.json({ error: data.error || 'Error marking messages as read' }, { status: response.status });
+        }
+        
+        return NextResponse.json(data);
       }
-      
-      return NextResponse.json(data);
     } else {
       // Comportamiento original para actualizar un mensaje
       const body = await request.json();

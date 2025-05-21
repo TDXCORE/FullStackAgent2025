@@ -5,7 +5,7 @@ import { Button, Dropdown } from 'react-bootstrap';
 import { ArrowDown, CornerUpRight, MoreHorizontal } from 'react-feather';
 import SimpleBar from 'simplebar-react';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
-import { getMessages, markMessagesAsRead } from '@/services/chatService';
+import { getMessages, markMessagesAsRead, wsClient } from '@/services/chatService';
 
 //Images
 
@@ -47,72 +47,49 @@ const ChatBody = () => {
         fetchMessages();
     }, [states.chatState.currentConversationId, dispatch]);
 
-    // Polling para actualizar mensajes periódicamente
+    // Escuchar eventos WebSocket para mensajes nuevos y eliminados
     useEffect(() => {
+        // Cuando se selecciona una conversación, marcar mensajes como leídos
         if (states.chatState.currentConversationId) {
-            // Función para obtener mensajes más recientes
-            const fetchLatestMessages = async () => {
+            const currentConversation = states.chatState.conversations.find(
+                conv => conv.id === states.chatState.currentConversationId
+            );
+            
+            if (currentConversation && currentConversation.unread_count > 0) {
                 try {
-                    const messagesData = await getMessages(states.chatState.currentConversationId);
-                    
-                    // Verificar si hay cambios en los mensajes
-                    const currentMessages = states.chatState.msg || [];
-                    const hasNewMessages = messagesData.length !== currentMessages.length ||
-                        JSON.stringify(messagesData) !== JSON.stringify(currentMessages);
-                    
-                    if (hasNewMessages) {
-                        console.log("Nuevos mensajes detectados, actualizando...", {
-                            nuevos: messagesData.length,
-                            actuales: currentMessages.length
+                    console.log(`Marcando mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
+                    markMessagesAsRead(states.chatState.currentConversationId)
+                        .then(() => {
+                            // Actualizar el estado global
+                            dispatch({
+                                type: "update_conversation",
+                                conversation: {
+                                    ...currentConversation,
+                                    unread_count: 0
+                                }
+                            });
+                        })
+                        .catch(error => {
+                            console.error("Error al marcar mensajes como leídos:", error);
                         });
-                        
-                        dispatch({ type: "update_messages", messages: messagesData });
-                        
-                        // Desplazar automáticamente al último mensaje
-                        setTimeout(() => {
-                            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-                        }, 100);
-                        
-                        // Si hay mensajes nuevos y la conversación actual tiene mensajes no leídos,
-                        // marcarlos como leídos
-                        const currentConversation = states.chatState.conversations.find(
-                            conv => conv.id === states.chatState.currentConversationId
-                        );
-                        
-                        if (currentConversation && currentConversation.unread_count > 0) {
-                            try {
-                                console.log(`Marcando mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
-                                await markMessagesAsRead(states.chatState.currentConversationId);
-                                
-                                // Actualizar el estado global
-                                dispatch({
-                                    type: "update_conversation",
-                                    conversation: {
-                                        ...currentConversation,
-                                        unread_count: 0
-                                    }
-                                });
-                            } catch (error) {
-                                console.error("Error al marcar mensajes como leídos:", error);
-                            }
-                        }
-                    }
                 } catch (error) {
-                    console.error("Error en polling de mensajes:", error);
+                    console.error("Error al marcar mensajes como leídos:", error);
                 }
-            };
-            
-            // Ejecutar inmediatamente y luego cada 3 segundos
-            fetchLatestMessages();
-            const intervalId = setInterval(fetchLatestMessages, 3000);
-            
-            // Limpiar intervalo al desmontar o cambiar de conversación
-            return () => {
-                console.log("Limpiando intervalo de polling para conversación:", states.chatState.currentConversationId);
-                clearInterval(intervalId);
-            };
+            }
         }
-    }, [states.chatState.currentConversationId, dispatch, states.chatState.msg, states.chatState.conversations]);
+    }, [states.chatState.currentConversationId, dispatch, states.chatState.conversations]);
+    
+    // Manejar eventos WebSocket para nuevos mensajes
+    useEffect(() => {
+        // Cuando se recibe un nuevo mensaje a través de WebSocket y pertenece a la conversación actual,
+        // desplazar automáticamente al último mensaje
+        if (states.chatState.wsConnected && states.chatState.currentConversationId) {
+            // Desplazar al último mensaje cuando cambia la lista de mensajes
+            setTimeout(() => {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    }, [states.chatState.msg, states.chatState.wsConnected, states.chatState.currentConversationId]);
 
     // Update local messages state when redux state changes
     useEffect(() => {
