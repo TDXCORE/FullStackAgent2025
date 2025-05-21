@@ -151,10 +151,22 @@ const chatReducer = (state = chatInitialStates, action) => {
                 loading: true
             };
         case "fetch_messages_success":
+            console.log(`Reducer: fetch_messages_success - Recibidos ${action.messages.length} mensajes`);
             return {
                 ...state,
                 loading: false,
                 msg: action.messages
+            };
+            
+        case "preload_messages":
+            console.log(`Reducer: preload_messages - Precargados ${action.messages.length} mensajes para conversación ${action.conversationId}`);
+            // Solo almacenar los mensajes, no cambiar la conversación actual
+            return {
+                ...state,
+                preloadedMessages: {
+                    ...state.preloadedMessages,
+                    [action.conversationId]: action.messages
+                }
             };
         case "fetch_messages_failure":
             return {

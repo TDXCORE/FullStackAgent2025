@@ -125,28 +125,67 @@ const ChatBody = () => {
         // Cuando se recibe un nuevo mensaje a través de WebSocket y pertenece a la conversación actual,
         // desplazar automáticamente al último mensaje
         if (states.chatState.wsConnected && states.chatState.currentConversationId) {
-            console.log(`ChatBody: WebSocket conectado y conversación seleccionada: ${states.chatState.currentConversationId}`);
-            console.log(`ChatBody: Total de mensajes en la conversación: ${states.chatState.msg.length}`);
+            console.log(`🔄 ChatBody: WebSocket conectado y conversación seleccionada: ${states.chatState.currentConversationId}`);
+            console.log(`📊 ChatBody: Total de mensajes en la conversación: ${states.chatState.msg.length}`);
             
             // Configurar un intervalo para verificar nuevos mensajes periódicamente
             const checkInterval = setInterval(async () => {
                 try {
-                    console.log(`ChatBody: Verificando nuevos mensajes para conversación: ${states.chatState.currentConversationId}`);
+                    console.log(`🔍 ChatBody: Verificando nuevos mensajes para conversación: ${states.chatState.currentConversationId}`);
+                    
+                    // Forzar reconexión del WebSocket periódicamente para asegurar conexión fresca
+                    if (!wsClient.isConnected) {
+                        console.log('🔄 ChatBody: WebSocket no conectado, intentando conectar...');
+                        try {
+                            await wsClient.connect();
+                            console.log('✅ ChatBody: WebSocket conectado exitosamente');
+                        } catch (connectError) {
+                            console.error('❌ ChatBody: Error al conectar WebSocket:', connectError);
+                        }
+                    }
+                    
                     const latestMessages = await getMessages(states.chatState.currentConversationId);
                     
                     // Comparar si hay nuevos mensajes
                     if (latestMessages.length > states.chatState.msg.length) {
-                        console.log(`ChatBody: Se encontraron ${latestMessages.length - states.chatState.msg.length} nuevos mensajes`);
-                        dispatch({ type: "fetch_messages_success", messages: latestMessages });
+                        console.log(`🆕 ChatBody: Se encontraron ${latestMessages.length - states.chatState.msg.length} nuevos mensajes`);
+                        
+                        // Verificar si hay mensajes realmente nuevos comparando IDs
+                        const currentMessageIds = new Set(states.chatState.msg.map(m => m.id));
+                        const newMessages = latestMessages.filter(m => !currentMessageIds.has(m.id));
+                        
+                        if (newMessages.length > 0) {
+                            console.log(`✅ ChatBody: Hay ${newMessages.length} mensajes realmente nuevos`);
+                            console.log('📝 Nuevos mensajes:', newMessages.map(m => ({
+                                id: m.id,
+                                text: m.text ? m.text.substring(0, 20) + '...' : 'No text',
+                                time: m.time
+                            })));
+                            
+                            dispatch({ type: "fetch_messages_success", messages: latestMessages });
+                            
+                            // Marcar mensajes como leídos
+                            try {
+                                console.log(`🔄 ChatBody: Marcando mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
+                                await markMessagesAsRead(states.chatState.currentConversationId);
+                                console.log('✅ ChatBody: Mensajes marcados como leídos exitosamente');
+                            } catch (error) {
+                                console.error('❌ ChatBody: Error al marcar mensajes como leídos:', error);
+                            }
+                        } else {
+                            console.log('ℹ️ ChatBody: Los mensajes nuevos ya están en la lista (IDs duplicados)');
+                        }
+                    } else {
+                        console.log('✅ ChatBody: No hay mensajes nuevos');
                     }
                 } catch (error) {
-                    console.error("Error al verificar nuevos mensajes:", error);
+                    console.error("❌ ChatBody: Error al verificar nuevos mensajes:", error);
                 }
-            }, 10000); // Verificar cada 10 segundos
+            }, 5000); // Verificar cada 5 segundos
             
             // Desplazar al último mensaje cuando cambia la lista de mensajes
             setTimeout(() => {
-                console.log("ChatBody: Desplazando al último mensaje");
+                console.log("🔄 ChatBody: Desplazando al último mensaje");
                 bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
             

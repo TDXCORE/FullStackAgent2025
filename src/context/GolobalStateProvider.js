@@ -84,33 +84,44 @@ export const GlobalStateProvider = ({ children }) => {
     // Cargar datos iniciales cuando el WebSocket está conectado
     useEffect(() => {
         if (states.chatState.wsConnected) {
-            console.log('WebSocket conectado, cargando datos iniciales...');
+            console.log('🔄 WebSocket conectado, cargando datos iniciales...');
             
             // Cargar contactos iniciales
             const loadInitialData = async () => {
                 try {
-                    console.log('Cargando contactos iniciales...');
+                    console.log('🔄 Cargando contactos iniciales...');
                     dispatch({ type: 'fetch_contacts_request' });
+                    
+                    // Forzar reconexión del WebSocket para asegurar conexión fresca
+                    if (wsClient.isConnected) {
+                        console.log('🔄 Reconectando WebSocket para asegurar conexión fresca...');
+                        await wsClient.disconnect();
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Esperar 500ms
+                    }
+                    
+                    await wsClient.connect();
+                    console.log('🔄 WebSocket reconectado exitosamente');
+                    
                     const contacts = await getContacts();
-                    console.log('Contactos cargados:', contacts);
+                    console.log('✅ Contactos cargados:', contacts.length);
                     dispatch({ type: 'fetch_contacts_success', contacts });
                     
                     // Si hay contactos, cargar conversaciones para cada contacto
                     if (contacts && contacts.length > 0) {
-                        console.log('Cargando conversaciones para contactos...');
+                        console.log('🔄 Cargando conversaciones para contactos...');
                         dispatch({ type: 'fetch_conversations_request' });
                         
                         let allConversations = [];
                         for (const contact of contacts) {
                             try {
-                                console.log(`Cargando conversaciones para contacto: ${contact.name} (${contact.id})`);
+                                console.log(`🔍 Cargando conversaciones para contacto: ${contact.name} (${contact.id})`);
                                 const userConversations = await getConversations(contact.id);
                                 if (userConversations && Array.isArray(userConversations)) {
-                                    console.log(`Encontradas ${userConversations.length} conversaciones para ${contact.name}`);
+                                    console.log(`✅ Encontradas ${userConversations.length} conversaciones para ${contact.name}`);
                                     allConversations = [...allConversations, ...userConversations];
                                 }
                             } catch (error) {
-                                console.error(`Error al cargar conversaciones para ${contact.name}:`, error);
+                                console.error(`❌ Error al cargar conversaciones para ${contact.name}:`, error);
                             }
                         }
                         
@@ -118,15 +129,51 @@ export const GlobalStateProvider = ({ children }) => {
                         const uniqueConversations = Array.from(
                             new Map(allConversations.map(conv => [conv.id, conv])).values()
                         );
-                        console.log(`Total de conversaciones únicas cargadas: ${uniqueConversations.length}`);
+                        console.log(`✅ Total de conversaciones únicas cargadas: ${uniqueConversations.length}`);
+                        
+                        // Ordenar conversaciones por fecha de actualización (más reciente primero)
+                        const sortedConversations = [...uniqueConversations].sort((a, b) => {
+                            if (a.updated_at && b.updated_at) {
+                                return new Date(b.updated_at) - new Date(a.updated_at);
+                            }
+                            return 0;
+                        });
+                        
+                        console.log('🔄 Conversaciones ordenadas por fecha:', 
+                            sortedConversations.slice(0, 3).map(c => ({
+                                id: c.id.substring(0, 8),
+                                updated_at: c.updated_at,
+                                last_message: c.last_message ? c.last_message.substring(0, 20) + '...' : 'No message'
+                            }))
+                        );
                         
                         dispatch({ 
                             type: 'fetch_conversations_success', 
-                            conversations: uniqueConversations 
+                            conversations: sortedConversations 
                         });
+                        
+                        // Si hay conversaciones, precargar mensajes para la primera conversación
+                        if (sortedConversations.length > 0) {
+                            const firstConversation = sortedConversations[0];
+                            console.log(`🔄 Precargando mensajes para la primera conversación: ${firstConversation.id}`);
+                            
+                            try {
+                                const messages = await getMessages(firstConversation.id);
+                                console.log(`✅ Precargados ${messages.length} mensajes para la primera conversación`);
+                                
+                                // No establecer como conversación actual, solo precargar
+                                dispatch({ 
+                                    type: 'preload_messages', 
+                                    conversationId: firstConversation.id,
+                                    messages 
+                                });
+                            } catch (error) {
+                                console.error('❌ Error al precargar mensajes:', error);
+                            }
+                        }
                     }
                 } catch (error) {
-                    console.error('Error cargando datos iniciales:', error);
+                    console.error('❌ Error cargando datos iniciales:', error);
                     dispatch({ 
                         type: 'fetch_contacts_failure', 
                         error: error.message 
@@ -135,8 +182,95 @@ export const GlobalStateProvider = ({ children }) => {
             };
             
             loadInitialData();
+            
+            // Configurar un intervalo para refrescar datos periódicamente
+            const refreshInterval = setInterval(async () => {
+                console.log('🔄 Refrescando datos automáticamente...');
+                
+                try {
+                    // Si hay una conversación seleccionada, refrescar sus mensajes
+                    if (states.chatState.currentConversationId) {
+                        console.log(`🔄 Refrescando mensajes para conversación: ${states.chatState.currentConversationId}`);
+                        const messages = await getMessages(states.chatState.currentConversationId);
+                        console.log(`✅ Refrescados ${messages.length} mensajes`);
+                        
+                        if (messages.length > states.chatState.msg.length) {
+                            console.log(`🆕 Hay ${messages.length - states.chatState.msg.length} mensajes nuevos`);
+                            dispatch({ type: 'fetch_messages_success', messages });
+                        }
+                    }
+                    
+                    // Refrescar todas las conversaciones para el primer contacto
+                    if (states.chatState.contacts && states.chatState.contacts.length > 0) {
+                        const firstContact = states.chatState.contacts[0];
+                        console.log(`🔄 Refrescando conversaciones para contacto: ${firstContact.name}`);
+                        
+                        const conversations = await getConversations(firstContact.id);
+                        if (conversations && Array.isArray(conversations) && conversations.length > 0) {
+                            console.log(`✅ Refrescadas ${conversations.length} conversaciones`);
+                            
+                            // Actualizar solo si hay cambios
+                            const currentConvsStr = JSON.stringify(states.chatState.conversations.map(c => ({ 
+                                id: c.id, 
+                                updated_at: c.updated_at,
+                                last_message: c.last_message
+                            })));
+                            
+                            const newConvsStr = JSON.stringify(conversations.map(c => ({ 
+                                id: c.id, 
+                                updated_at: c.updated_at,
+                                last_message: c.last_message
+                            })));
+                            
+                            if (currentConvsStr !== newConvsStr) {
+                                console.log('🆕 Hay cambios en las conversaciones, actualizando...');
+                                
+                                // Combinar las conversaciones existentes con las nuevas
+                                const combinedConversations = [...states.chatState.conversations];
+                                
+                                // Actualizar conversaciones existentes y añadir nuevas
+                                conversations.forEach(newConv => {
+                                    const existingIndex = combinedConversations.findIndex(c => c.id === newConv.id);
+                                    if (existingIndex >= 0) {
+                                        // Actualizar conversación existente
+                                        combinedConversations[existingIndex] = {
+                                            ...combinedConversations[existingIndex],
+                                            ...newConv
+                                        };
+                                    } else {
+                                        // Añadir nueva conversación
+                                        combinedConversations.push(newConv);
+                                    }
+                                });
+                                
+                                // Ordenar por fecha de actualización
+                                const sortedConversations = [...combinedConversations].sort((a, b) => {
+                                    if (a.updated_at && b.updated_at) {
+                                        return new Date(b.updated_at) - new Date(a.updated_at);
+                                    }
+                                    return 0;
+                                });
+                                
+                                dispatch({ 
+                                    type: 'fetch_conversations_success', 
+                                    conversations: sortedConversations 
+                                });
+                            } else {
+                                console.log('✅ No hay cambios en las conversaciones');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Error al refrescar datos:', error);
+                }
+            }, 15000); // Refrescar cada 15 segundos
+            
+            // Limpiar intervalo al desmontar
+            return () => {
+                clearInterval(refreshInterval);
+            };
         }
-    }, [states.chatState.wsConnected, dispatch]);
+    }, [states.chatState.wsConnected, dispatch, states.chatState.currentConversationId, states.chatState.contacts, states.chatState.msg, states.chatState.conversations]);
 
     const ContextValue = useMemo(() => {
         return { states, dispatch };

@@ -134,18 +134,19 @@ class WebSocketClient {
     _handleMessage(data) {
         try {
             const message = JSON.parse(data);
-            console.log('Mensaje recibido:', message);
+            console.log('📩 Mensaje recibido:', message.type || 'sin tipo');
 
             // Manejar mensaje de conexión inicial
             if (message.type === 'connected') {
                 this.clientId = message.payload?.client_id;
-                console.log(`ID de cliente asignado: ${this.clientId}`);
+                console.log(`✅ ID de cliente asignado: ${this.clientId}`);
                 this._triggerEvent('connect', message.payload);
                 return;
             }
 
             // Manejar respuestas a solicitudes
             if (message.id && this.responseHandlers[message.id]) {
+                console.log(`✅ Respuesta recibida para solicitud ID: ${message.id}`);
                 const handler = this.responseHandlers[message.id];
                 handler(message);
                 delete this.responseHandlers[message.id];
@@ -154,20 +155,34 @@ class WebSocketClient {
 
             // Manejar eventos
             if (message.type === 'event') {
+                console.log(`📣 Evento recibido: ${message.event}`, message.payload);
+                
+                // Si es un evento de nuevo mensaje, registrar detalles adicionales
+                if (message.event === 'new_message' && message.payload?.message) {
+                    console.log('🆕 NUEVO MENSAJE RECIBIDO:');
+                    console.log(`📝 ID: ${message.payload.message.id}`);
+                    console.log(`💬 Contenido: ${message.payload.message.content?.substring(0, 50)}${message.payload.message.content?.length > 50 ? '...' : ''}`);
+                    console.log(`👤 Rol: ${message.payload.message.role}`);
+                    console.log(`🔄 Conversación: ${message.payload.message.conversation_id}`);
+                    console.log(`⏰ Creado: ${new Date(message.payload.message.created_at).toLocaleString()}`);
+                }
+                
                 this._triggerEvent(message.event, message.payload);
                 return;
             }
 
             // Manejar heartbeat
             if (message.type === 'heartbeat') {
+                console.log('💓 Heartbeat recibido');
                 this._triggerEvent('heartbeat', message.payload);
                 return;
             }
 
             // Otros mensajes
+            console.log('📩 Otro tipo de mensaje recibido:', message);
             this._triggerEvent('message', message);
         } catch (error) {
-            console.error('Error al procesar mensaje:', error, data);
+            console.error('❌ Error al procesar mensaje:', error, data);
         }
     }
 
