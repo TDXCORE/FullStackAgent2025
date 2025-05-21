@@ -14,16 +14,48 @@ const ChatBody = () => {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    // Verificar si el WebSocket está conectado
+    useEffect(() => {
+        if (states.chatState.currentConversationId && !states.chatState.wsConnected) {
+            console.log("WebSocket no conectado, intentando conectar...");
+            wsClient.connect()
+                .then(() => {
+                    console.log("WebSocket conectado exitosamente desde ChatBody");
+                })
+                .catch(error => {
+                    console.error("Error al conectar WebSocket desde ChatBody:", error);
+                });
+        }
+    }, [states.chatState.currentConversationId, states.chatState.wsConnected]);
+
     // Fetch messages when conversation ID changes
     useEffect(() => {
         const fetchMessages = async () => {
             if (states.chatState.currentConversationId) {
                 try {
-                    console.log(`Obteniendo mensajes para conversación ID: ${states.chatState.currentConversationId}`);
+                    console.log(`ChatBody: Obteniendo mensajes para conversación ID: ${states.chatState.currentConversationId}`);
                     setLoading(true);
                     dispatch({ type: "fetch_messages_request" });
+                    
+                    // Verificar si el WebSocket está conectado
+                    if (!wsClient.isConnected) {
+                        console.log("WebSocket no conectado, intentando conectar antes de obtener mensajes...");
+                        try {
+                            await wsClient.connect();
+                            console.log("WebSocket conectado exitosamente");
+                        } catch (connectError) {
+                            console.error("Error al conectar WebSocket:", connectError);
+                        }
+                    }
+                    
                     const messagesData = await getMessages(states.chatState.currentConversationId);
-                    console.log(`Mensajes obtenidos:`, messagesData);
+                    console.log(`ChatBody: ${messagesData.length} mensajes obtenidos para conversación ${states.chatState.currentConversationId}`);
+                    
+                    if (messagesData.length > 0) {
+                        console.log("Primer mensaje:", messagesData[0]);
+                        console.log("Último mensaje:", messagesData[messagesData.length - 1]);
+                    }
+                    
                     dispatch({ type: "fetch_messages_success", messages: messagesData });
                     
                     // Desplazar automáticamente al último mensaje
@@ -47,19 +79,26 @@ const ChatBody = () => {
         fetchMessages();
     }, [states.chatState.currentConversationId, dispatch]);
 
-    // Escuchar eventos WebSocket para mensajes nuevos y eliminados
+    // Marcar mensajes como leídos cuando se selecciona una conversación
     useEffect(() => {
         // Cuando se selecciona una conversación, marcar mensajes como leídos
         if (states.chatState.currentConversationId) {
+            console.log(`ChatBody: Verificando mensajes no leídos para conversación: ${states.chatState.currentConversationId}`);
+            
             const currentConversation = states.chatState.conversations.find(
                 conv => conv.id === states.chatState.currentConversationId
             );
             
-            if (currentConversation && currentConversation.unread_count > 0) {
-                try {
-                    console.log(`Marcando mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
+            if (currentConversation) {
+                console.log(`ChatBody: Conversación encontrada, mensajes no leídos: ${currentConversation.unread_count}`);
+                
+                if (currentConversation.unread_count > 0) {
+                    console.log(`ChatBody: Marcando ${currentConversation.unread_count} mensajes como leídos para conversación: ${states.chatState.currentConversationId}`);
+                    
                     markMessagesAsRead(states.chatState.currentConversationId)
-                        .then(() => {
+                        .then((result) => {
+                            console.log("ChatBody: Mensajes marcados como leídos:", result);
+                            
                             // Actualizar el estado global
                             dispatch({
                                 type: "update_conversation",
@@ -72,9 +111,11 @@ const ChatBody = () => {
                         .catch(error => {
                             console.error("Error al marcar mensajes como leídos:", error);
                         });
-                } catch (error) {
-                    console.error("Error al marcar mensajes como leídos:", error);
+                } else {
+                    console.log("ChatBody: No hay mensajes no leídos para marcar");
                 }
+            } else {
+                console.log(`ChatBody: No se encontró la conversación con ID: ${states.chatState.currentConversationId}`);
             }
         }
     }, [states.chatState.currentConversationId, dispatch, states.chatState.conversations]);
@@ -84,8 +125,12 @@ const ChatBody = () => {
         // Cuando se recibe un nuevo mensaje a través de WebSocket y pertenece a la conversación actual,
         // desplazar automáticamente al último mensaje
         if (states.chatState.wsConnected && states.chatState.currentConversationId) {
+            console.log(`ChatBody: WebSocket conectado y conversación seleccionada: ${states.chatState.currentConversationId}`);
+            console.log(`ChatBody: Total de mensajes en la conversación: ${states.chatState.msg.length}`);
+            
             // Desplazar al último mensaje cuando cambia la lista de mensajes
             setTimeout(() => {
+                console.log("ChatBody: Desplazando al último mensaje");
                 bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
         }

@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useMemo, useReducer, useState, useEffect } from 'react';
 import { initialStates, rootReducer } from './reducer/rootReducer';
-import { wsClient } from '@/services/chatService';
+import { wsClient, getContacts, getConversations } from '@/services/chatService';
 // import { GlobalReducer, initialStates } from './GlobalReducer';
 
 // Create a new context
@@ -60,6 +60,63 @@ export const GlobalStateProvider = ({ children }) => {
             wsClient.disconnect();
         };
     }, [dispatch]);
+    
+    // Cargar datos iniciales cuando el WebSocket está conectado
+    useEffect(() => {
+        if (states.chatState.wsConnected) {
+            console.log('WebSocket conectado, cargando datos iniciales...');
+            
+            // Cargar contactos iniciales
+            const loadInitialData = async () => {
+                try {
+                    console.log('Cargando contactos iniciales...');
+                    dispatch({ type: 'fetch_contacts_request' });
+                    const contacts = await getContacts();
+                    console.log('Contactos cargados:', contacts);
+                    dispatch({ type: 'fetch_contacts_success', contacts });
+                    
+                    // Si hay contactos, cargar conversaciones para cada contacto
+                    if (contacts && contacts.length > 0) {
+                        console.log('Cargando conversaciones para contactos...');
+                        dispatch({ type: 'fetch_conversations_request' });
+                        
+                        let allConversations = [];
+                        for (const contact of contacts) {
+                            try {
+                                console.log(`Cargando conversaciones para contacto: ${contact.name} (${contact.id})`);
+                                const userConversations = await getConversations(contact.id);
+                                if (userConversations && Array.isArray(userConversations)) {
+                                    console.log(`Encontradas ${userConversations.length} conversaciones para ${contact.name}`);
+                                    allConversations = [...allConversations, ...userConversations];
+                                }
+                            } catch (error) {
+                                console.error(`Error al cargar conversaciones para ${contact.name}:`, error);
+                            }
+                        }
+                        
+                        // Eliminar duplicados basados en ID de conversación
+                        const uniqueConversations = Array.from(
+                            new Map(allConversations.map(conv => [conv.id, conv])).values()
+                        );
+                        console.log(`Total de conversaciones únicas cargadas: ${uniqueConversations.length}`);
+                        
+                        dispatch({ 
+                            type: 'fetch_conversations_success', 
+                            conversations: uniqueConversations 
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error cargando datos iniciales:', error);
+                    dispatch({ 
+                        type: 'fetch_contacts_failure', 
+                        error: error.message 
+                    });
+                }
+            };
+            
+            loadInitialData();
+        }
+    }, [states.chatState.wsConnected, dispatch]);
 
     const ContextValue = useMemo(() => {
         return { states, dispatch };

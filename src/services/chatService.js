@@ -386,8 +386,25 @@ export const wsClient = new WebSocketClient(WS_URL, WS_TOKEN);
  */
 export const getContacts = async () => {
   try {
-    // Usar WebSocket en lugar de REST API
+    console.log('Fetching contacts via WebSocket');
+    
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para obtener usuarios
+    console.log('Solicitando usuarios a través de WebSocket...');
     const result = await wsClient.getUsers();
+    
+    console.log('Respuesta completa de WebSocket para usuarios:', result);
     
     // Transformar datos para mantener compatibilidad con el formato actual
     const contacts = result.users.map(user => ({
@@ -404,16 +421,26 @@ export const getContacts = async () => {
       unread: 0
     }));
     
+    console.log(`Procesados ${contacts.length} contactos:`, 
+      contacts.map(c => ({
+        id: c.id,
+        name: c.name
+      }))
+    );
+    
     return contacts;
   } catch (error) {
-    console.error('Error fetching contacts:', error);
+    console.error('Error fetching contacts via WebSocket:', error);
     // Intentar fallback a REST API si WebSocket falla
     try {
+      console.log('Fallback: Fetching contacts from REST API');
       const response = await axios.get(`${API_URL}/users`);
+      console.log(`Received ${response.data.length} contacts via REST API`);
       return response.data;
     } catch (fallbackError) {
       console.error('Fallback REST API also failed:', fallbackError);
-      throw error; // Lanzar el error original de WebSocket
+      // Devolver un array vacío en lugar de propagar el error
+      return [];
     }
   }
 };
@@ -427,12 +454,34 @@ export const getConversations = async (userId) => {
   try {
     console.log(`Fetching conversations for user: ${userId} via WebSocket`);
     
-    // Usar WebSocket en lugar de REST API
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para obtener conversaciones
+    console.log(`Solicitando conversaciones para usuario ${userId} a través de WebSocket...`);
     const result = await wsClient.getConversations(userId);
     
     // Verificar y loguear la respuesta
+    console.log('Respuesta completa de WebSocket para conversaciones:', result);
+    
     const conversations = result.conversations || [];
-    console.log(`Received ${conversations.length} conversations via WebSocket:`, conversations);
+    console.log(`Received ${conversations.length} conversations via WebSocket:`, 
+      conversations.map(c => ({
+        id: c.id,
+        external_id: c.external_id,
+        unread: c.unread_count,
+        last_message: c.last_message?.substring(0, 20) + (c.last_message?.length > 20 ? '...' : '')
+      }))
+    );
     
     // Asegurar que unread_count sea un número en todas las conversaciones
     const normalizedConversations = conversations.map(conv => ({
@@ -514,8 +563,25 @@ export const createConversation = async (userId, externalId, platform = 'web') =
  */
 export const getMessages = async (conversationId) => {
   try {
-    // Usar WebSocket en lugar de REST API
+    console.log(`Fetching messages for conversation: ${conversationId} via WebSocket`);
+    
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para obtener mensajes
+    console.log(`Solicitando mensajes para conversación ${conversationId} a través de WebSocket...`);
     const result = await wsClient.getMessages(conversationId);
+    
+    console.log('Respuesta completa de WebSocket para mensajes:', result);
     
     // Transformar mensajes al formato esperado por el frontend
     const messages = result.messages.map(message => ({
@@ -528,17 +594,22 @@ export const getMessages = async (conversationId) => {
       read: message.read
     }));
     
+    console.log(`Procesados ${messages.length} mensajes para la conversación ${conversationId}`);
+    
     return messages;
   } catch (error) {
     console.error('Error fetching messages via WebSocket:', error);
     
     // Intentar fallback a REST API si WebSocket falla
     try {
+      console.log(`Fallback: Fetching messages from: ${API_URL}/messages?conversation_id=${conversationId}`);
       const response = await axios.get(`${API_URL}/messages?conversation_id=${conversationId}`);
+      console.log(`Received ${response.data.length} messages via REST API`);
       return response.data;
     } catch (fallbackError) {
       console.error('Fallback REST API also failed:', fallbackError);
-      throw error; // Lanzar el error original de WebSocket
+      // Devolver un array vacío en lugar de propagar el error
+      return [];
     }
   }
 };
@@ -553,8 +624,27 @@ export const getMessages = async (conversationId) => {
  */
 export const sendMessage = async (conversationId, content, messageType = 'text', mediaUrl = null) => {
   try {
-    // Usar WebSocket en lugar de REST API
+    console.log(`Sending message to conversation: ${conversationId} via WebSocket`);
+    
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para enviar mensaje
+    console.log(`Enviando mensaje a conversación ${conversationId} a través de WebSocket...`);
+    console.log(`Contenido: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}", Tipo: ${messageType}`);
+    
     const result = await wsClient.sendMessage(conversationId, content, 'user', messageType, mediaUrl);
+    
+    console.log('Respuesta completa de WebSocket para envío de mensaje:', result);
     
     // Transformar al formato esperado por el frontend
     const message = {
@@ -566,22 +656,30 @@ export const sendMessage = async (conversationId, content, messageType = 'text',
       media_url: result.message.media_url
     };
     
+    console.log(`Mensaje enviado exitosamente con ID: ${message.id}`);
+    
     return message;
   } catch (error) {
     console.error('Error sending message via WebSocket:', error);
     
     // Intentar fallback a REST API si WebSocket falla
     try {
+      console.log(`Fallback: Sending message via REST API to: ${API_URL}/messages`);
       const response = await axios.post(`${API_URL}/messages`, {
         conversation_id: conversationId,
         content,
         message_type: messageType,
         media_url: mediaUrl
       });
+      console.log(`Message sent successfully via REST API with ID: ${response.data.id}`);
       return response.data;
     } catch (fallbackError) {
       console.error('Fallback REST API also failed:', fallbackError);
-      throw error; // Lanzar el error original de WebSocket
+      // Devolver un objeto de error en lugar de propagar el error
+      return {
+        error: true,
+        message: error.message || 'Error al enviar mensaje'
+      };
     }
   }
 };
@@ -611,19 +709,44 @@ export const toggleAgent = async (conversationId, enable) => {
  */
 export const markMessagesAsRead = async (conversationId) => {
   try {
-    // Usar WebSocket en lugar de REST API
+    console.log(`Marking messages as read for conversation: ${conversationId} via WebSocket`);
+    
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para marcar mensajes como leídos
+    console.log(`Solicitando marcar mensajes como leídos para conversación ${conversationId} a través de WebSocket...`);
     const result = await wsClient.markMessagesAsRead(conversationId);
+    
+    console.log('Respuesta completa de WebSocket para marcar mensajes como leídos:', result);
+    console.log(`Mensajes marcados como leídos exitosamente para conversación: ${conversationId}`);
+    
     return result;
   } catch (error) {
     console.error('Error marking messages as read via WebSocket:', error);
     
     // Intentar fallback a REST API si WebSocket falla
     try {
+      console.log(`Fallback: Marking messages as read via REST API: ${API_URL}/messages/read?conversation_id=${conversationId}`);
       const response = await axios.put(`${API_URL}/messages/read?conversation_id=${conversationId}`);
+      console.log('Messages marked as read successfully via REST API');
       return response.data;
     } catch (fallbackError) {
       console.error('Fallback REST API also failed:', fallbackError);
-      throw error; // Lanzar el error original de WebSocket
+      // Devolver un objeto de éxito falso en lugar de propagar el error
+      return {
+        success: false,
+        error: error.message || 'Error al marcar mensajes como leídos'
+      };
     }
   }
 };

@@ -77,14 +77,22 @@ const ContactList = ({ invitePeople }) => {
         fetchContacts();
     }, [dispatch]);
     
-    // Cargar conversaciones iniciales y configurar para actualizaciones en tiempo real
+    // Verificar si hay conversaciones cargadas desde el WebSocket
     useEffect(() => {
-        // Función para obtener todas las conversaciones para todos los contactos
-        const fetchAllConversations = async () => {
-            console.log("🔄 Iniciando fetchAllConversations...");
-            try {
-                // Si tenemos contactos, obtener conversaciones para cada uno
-                if (states.chatState.contacts && states.chatState.contacts.length > 0) {
+        console.log("🔄 Verificando estado de WebSocket y conversaciones...");
+        
+        // Si el WebSocket está conectado pero no hay conversaciones, intentar cargarlas
+        if (states.chatState.wsConnected && 
+            states.chatState.contacts && 
+            states.chatState.contacts.length > 0 && 
+            (!states.chatState.conversations || states.chatState.conversations.length === 0)) {
+            
+            console.log("WebSocket conectado pero sin conversaciones, intentando cargar...");
+            
+            // Función para obtener todas las conversaciones para todos los contactos
+            const fetchAllConversations = async () => {
+                console.log("🔄 Iniciando fetchAllConversations desde ContactList...");
+                try {
                     console.log("🔍 DEBUG: Estado actual de contactos:", 
                         states.chatState.contacts.map(c => ({
                             id: c.id.substring(0, 8),
@@ -116,31 +124,38 @@ const ContactList = ({ invitePeople }) => {
                     );
                     console.log(`Total de conversaciones únicas encontradas: ${uniqueConversations.length}`);
 
-                    // Usar uniqueConversations en lugar de conversations
-                    const conversations = uniqueConversations;
-                    
                     // Verificar que tenemos datos válidos
-                    if (conversations && Array.isArray(conversations)) {
+                    if (uniqueConversations && Array.isArray(uniqueConversations) && uniqueConversations.length > 0) {
                         // Ordenar conversaciones (no leídas primero)
-                        const sortedConversations = sortConversations(conversations);
-                        
+                        const sortedConversations = sortConversations(uniqueConversations);
+                        console.log("Enviando conversaciones ordenadas al estado global:", sortedConversations.length);
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
+                    } else {
+                        console.log("No se encontraron conversaciones para ningún contacto");
                     }
+                } catch (error) {
+                    console.error("Error al obtener conversaciones:", error);
                 }
-            } catch (error) {
-                console.error("Error al obtener conversaciones:", error);
-            }
-        };
+            };
+            
+            fetchAllConversations();
+        } else if (states.chatState.wsConnected && states.chatState.conversations && states.chatState.conversations.length > 0) {
+            console.log(`WebSocket conectado y ${states.chatState.conversations.length} conversaciones ya cargadas`);
+        } else if (!states.chatState.wsConnected) {
+            console.log("WebSocket no conectado, esperando conexión...");
+        }
         
-        // Ejecutar una vez al cargar el componente
-        fetchAllConversations();
-        
-    }, [dispatch, states.chatState.contacts, sortConversations]);
+    }, [dispatch, states.chatState.contacts, states.chatState.wsConnected, states.chatState.conversations, sortConversations]);
     
-    // Actualizar la lista de contactos cuando cambian las conversaciones
+    // Actualizar la lista de contactos cuando cambian las conversaciones o los contactos
     useEffect(() => {
+        console.log("🔄 Actualizando lista de contactos basada en conversaciones y contactos...");
+        console.log(`Conversaciones: ${states.chatState.conversations?.length || 0}, Contactos: ${states.chatState.contacts?.length || 0}`);
+        
         if (states.chatState.conversations && states.chatState.conversations.length > 0 && 
             states.chatState.contacts && states.chatState.contacts.length > 0) {
+            
+            console.log("Tenemos conversaciones y contactos, generando lista combinada...");
             
             // Crear una lista de contactos a partir de las conversaciones
             let contactsWithConversations = [];
@@ -181,6 +196,8 @@ const ContactList = ({ invitePeople }) => {
                     });
                 }
             });
+            
+            console.log(`Generados ${contactsWithConversations.length} contactos con conversaciones`);
                 
             // Ordenar todos los contactos (incluyendo los virtuales)
             const sortedContacts = [...contactsWithConversations].sort((a, b) => {
@@ -200,12 +217,34 @@ const ContactList = ({ invitePeople }) => {
             });
             
             // Verificar si hay cambios en la lista antes de actualizarla
-            const hasChanges = JSON.stringify(sortedContacts) !== JSON.stringify(list);
+            const currentListStr = JSON.stringify(list.map(item => ({
+                id: item.id,
+                conversationId: item.conversationId,
+                unread: item.unread,
+                updated_at: item.updated_at
+            })));
+            
+            const newListStr = JSON.stringify(sortedContacts.map(item => ({
+                id: item.id,
+                conversationId: item.conversationId,
+                unread: item.unread,
+                updated_at: item.updated_at
+            })));
+            
+            const hasChanges = currentListStr !== newListStr;
+            
             if (hasChanges) {
-                console.log("📋 Actualizando lista de contactos con datos de WebSocket");
+                console.log("📋 Actualizando lista de contactos con datos actualizados");
+                console.log(`Lista anterior: ${list.length} contactos, Nueva lista: ${sortedContacts.length} contactos`);
                 // Actualizar la lista con los contactos ordenados
                 setList([...sortedContacts]);
+            } else {
+                console.log("No hay cambios en la lista de contactos, omitiendo actualización");
             }
+        } else if (states.chatState.contacts && states.chatState.contacts.length > 0 && list.length === 0) {
+            // Si no hay conversaciones pero hay contactos, mostrar los contactos sin conversaciones
+            console.log("No hay conversaciones pero sí contactos, mostrando contactos sin conversaciones");
+            setList(states.chatState.contacts);
         }
     }, [states.chatState.conversations, states.chatState.contacts, list]);
 
