@@ -360,8 +360,13 @@ const chatReducer = (state = chatInitialStates, action) => {
                     contact.id === action.payload.user.id
                         ? { 
                             ...contact, 
-                            name: action.payload.user.full_name,
-                            // Actualizar otros campos según sea necesario
+                            name: action.payload.user.full_name || action.payload.user.phone || action.payload.user.email || 'Usuario sin nombre',
+                            avatar: {
+                                ...contact.avatar,
+                                title: action.payload.user.full_name ? action.payload.user.full_name.charAt(0).toUpperCase() : 
+                                       (action.payload.user.phone ? action.payload.user.phone.charAt(0).toUpperCase() : 
+                                       (action.payload.user.email ? action.payload.user.email.charAt(0).toUpperCase() : 'U'))
+                            }
                           }
                         : contact
                 )

@@ -347,17 +347,18 @@ class WebSocketClient {
         return this.request('messages', 'create', { message });
     }
 
-    /**
-     * Marca los mensajes de una conversación como leídos
-     * @param {string} conversationId - ID de la conversación
-     * @returns {Promise} Promesa que se resuelve con el resultado
-     */
-    markMessagesAsRead(conversationId) {
-        return this.request('messages', 'update', { 
-            conversation_id: conversationId,
-            read: true
-        });
-    }
+/**
+ * Marca los mensajes de una conversación como leídos
+ * @param {string} conversationId - ID de la conversación
+ * @returns {Promise} Promesa que se resuelve con el resultado
+ */
+markMessagesAsRead(conversationId) {
+    return this.request('messages', 'update', { 
+        conversation_id: conversationId,
+        message_id: 'all', // El backend espera un message_id, pero para marcar todos como leídos usamos 'all'
+        read: true
+    });
+}
 
     /**
      * Obtiene información de un usuario

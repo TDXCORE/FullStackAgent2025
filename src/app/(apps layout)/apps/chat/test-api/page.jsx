@@ -535,10 +535,24 @@ const TestApiPage = () => {
                       console.log('Respuesta directa para usuarios:', result);
                       
                       if (result.users && Array.isArray(result.users)) {
-                        setContacts(result.users.map(user => ({
+                        // Transformar datos para mantener compatibilidad con el formato completo
+                        const formattedContacts = result.users.map(user => ({
                           id: user.id,
-                          name: user.full_name || user.phone || user.email || 'Usuario sin nombre'
-                        })));
+                          name: user.full_name || user.phone || user.email || 'Usuario sin nombre',
+                          avatar: {
+                            type: "init",
+                            variant: "primary",
+                            title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 
+                                  (user.phone ? user.phone.charAt(0).toUpperCase() : 
+                                  (user.email ? user.email.charAt(0).toUpperCase() : 'U'))
+                          },
+                          status: "offline",
+                          lastChat: "Click to start conversation",
+                          time: new Date(user.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                          unread: 0
+                        }));
+                        
+                        setContacts(formattedContacts);
                         addLog(`Obtenidos ${result.users.length} usuarios directamente`);
                       } else {
                         addLog('No se encontraron usuarios en la respuesta directa');
