@@ -10,25 +10,35 @@ const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waagentv1.on
 export async function GET() {
   try {
     try {
-      // Intentar usar WebSocket primero
+      // Intentar usar WebSocket primero con el parámetro getAll
       await wsClient.connect();
-      const result = await wsClient.getUsers();
+      const result = await wsClient.getUsers(true);
+      
+      // Verificar si la respuesta contiene usuarios
+      if (!result.users || !Array.isArray(result.users)) {
+        console.error('Respuesta inesperada del servidor WebSocket:', result);
+        throw new Error('Formato de respuesta inesperado');
+      }
       
       // Transformar datos para mantener compatibilidad con el formato actual
       const contacts = result.users.map(user => ({
         id: user.id,
-        name: user.full_name,
+        name: user.full_name || user.phone || user.email || 'Usuario sin nombre',
         // Generate avatar data (since it's not in the schema)
         avatar: {
           type: "init",
           variant: "primary", // Can randomize this based on user.id
-          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
+          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 
+                 (user.phone ? user.phone.charAt(0).toUpperCase() : 
+                 (user.email ? user.email.charAt(0).toUpperCase() : 'U'))
         },
         status: "offline", // Default status
         lastChat: "Click to start conversation",
-        time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        time: new Date(user.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         unread: 0
       }));
+      
+      console.log(`Obtenidos ${contacts.length} contactos vía WebSocket`);
       
       return NextResponse.json(contacts);
     } catch (wsError) {
@@ -46,18 +56,22 @@ export async function GET() {
       // Transform data for frontend
       const contacts = data.map(user => ({
         id: user.id,
-        name: user.full_name,
+        name: user.full_name || user.phone || user.email || 'Usuario sin nombre',
         // Generate avatar data (since it's not in the schema)
         avatar: {
           type: "init",
           variant: "primary", // Can randomize this based on user.id
-          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
+          title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 
+                 (user.phone ? user.phone.charAt(0).toUpperCase() : 
+                 (user.email ? user.email.charAt(0).toUpperCase() : 'U'))
         },
         status: "offline", // Default status
         lastChat: "Click to start conversation",
-        time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        time: new Date(user.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         unread: 0
       }));
+      
+      console.log(`Obtenidos ${contacts.length} contactos vía REST API`);
       
       return NextResponse.json(contacts);
     }

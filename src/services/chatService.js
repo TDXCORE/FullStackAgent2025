@@ -370,10 +370,11 @@ class WebSocketClient {
 
     /**
      * Obtiene todos los usuarios
+     * @param {boolean} getAll - Indica si se deben obtener todos los usuarios sin filtros
      * @returns {Promise} Promesa que se resuelve con la lista de usuarios
      */
-    getUsers() {
-        return this.request('users', 'get_all');
+    getUsers(getAll = false) {
+        return this.request('users', 'get_all', getAll ? { get_all: true } : {});
     }
 }
 
@@ -393,31 +394,39 @@ export const getContacts = async () => {
       console.log('WebSocket no conectado, intentando conectar...');
       try {
         await wsClient.connect();
-        console.log('WebSocket conectado exitosamente');
+        console.log('WebSocket conectado exitosamente, client_id:', wsClient.clientId);
       } catch (connectError) {
         console.error('Error al conectar WebSocket:', connectError);
         throw new Error('No se pudo conectar al WebSocket');
       }
     }
     
-    // Usar WebSocket para obtener usuarios
+    // Usar WebSocket para obtener usuarios con parámetros de búsqueda
     console.log('Solicitando usuarios a través de WebSocket...');
-    const result = await wsClient.getUsers();
     
-    console.log('Respuesta completa de WebSocket para usuarios:', result);
+    // Usar el método getUsers con el parámetro getAll
+    const result = await wsClient.getUsers(true);
+    
+    console.log('Respuesta completa de WebSocket para usuarios:', JSON.stringify(result));
+    
+    // Verificar si la respuesta contiene usuarios
+    if (!result.users || !Array.isArray(result.users)) {
+      console.error('Respuesta inesperada del servidor:', result);
+      return [];
+    }
     
     // Transformar datos para mantener compatibilidad con el formato actual
     const contacts = result.users.map(user => ({
       id: user.id,
-      name: user.full_name,
+      name: user.full_name || user.phone || user.email || 'Usuario sin nombre',
       avatar: {
         type: "init",
         variant: "primary",
-        title: user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'
+        title: user.full_name ? user.full_name.charAt(0).toUpperCase() : (user.phone ? user.phone.charAt(0).toUpperCase() : 'U')
       },
       status: "offline",
       lastChat: "Click to start conversation",
-      time: new Date(user.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      time: new Date(user.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       unread: 0
     }));
     

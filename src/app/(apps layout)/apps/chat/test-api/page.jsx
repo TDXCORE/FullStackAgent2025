@@ -507,14 +507,55 @@ const TestApiPage = () => {
               <h5 className="mb-0">Contacts</h5>
             </Card.Header>
             <Card.Body>
-              <Button 
-                variant="primary" 
-                onClick={testGetContacts} 
-                disabled={loading}
-                className="mb-3"
-              >
-                {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Fetch Contacts'}
-              </Button>
+              <div className="d-flex gap-2 mb-3">
+                <Button 
+                  variant="primary" 
+                  onClick={testGetContacts} 
+                  disabled={loading}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Fetch Contacts'}
+                </Button>
+                
+                <Button 
+                  variant="outline-primary" 
+                  onClick={async () => {
+                    if (!wsConnected) {
+                      addLog('WebSocket no conectado. Conectando primero...');
+                      await testConnectWebSocket();
+                    }
+                    
+                    try {
+                      setLoading(true);
+                      addLog('Probando conexión directa con el servidor WebSocket para obtener usuarios...');
+                      
+                      // Usar el método getUsers con el parámetro getAll
+                      const result = await wsClient.getUsers(true);
+                      
+                      addLog(`Respuesta directa del servidor: ${JSON.stringify(result)}`);
+                      console.log('Respuesta directa para usuarios:', result);
+                      
+                      if (result.users && Array.isArray(result.users)) {
+                        setContacts(result.users.map(user => ({
+                          id: user.id,
+                          name: user.full_name || user.phone || user.email || 'Usuario sin nombre'
+                        })));
+                        addLog(`Obtenidos ${result.users.length} usuarios directamente`);
+                      } else {
+                        addLog('No se encontraron usuarios en la respuesta directa');
+                      }
+                      
+                      setLoading(false);
+                    } catch (error) {
+                      addLog(`Error en solicitud directa: ${error.message}`);
+                      console.error('Error en solicitud directa:', error);
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? <><Spinner size="sm" animation="border" /> Loading...</> : 'Probar Conexión Directa'}
+                </Button>
+              </div>
               
               {contacts.length > 0 && (
                 <div className="mt-3">
