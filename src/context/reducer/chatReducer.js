@@ -253,34 +253,50 @@ const chatReducer = (state = chatInitialStates, action) => {
             };
             
         case "ws_new_message":
+            console.log("Reducer: Nuevo mensaje recibido vía WebSocket:", action.payload.message);
+            
             // Si el mensaje pertenece a la conversación actual, añadirlo a los mensajes
+            let updatedMessages = [...state.msg];
+            
             if (action.payload.message.conversation_id === state.currentConversationId) {
-                const newMessage = {
-                    id: action.payload.message.id,
-                    types: action.payload.message.role === 'user' ? 'sent' : 'received',
-                    text: action.payload.message.content,
-                    time: new Date(action.payload.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                    message_type: action.payload.message.message_type || 'text',
-                    media_url: action.payload.message.media_url
-                };
+                console.log("Reducer: El mensaje pertenece a la conversación actual, añadiéndolo a la lista");
                 
-                return {
-                    ...state,
-                    msg: [...state.msg, newMessage]
-                };
+                // Verificar si el mensaje ya existe en la lista (para evitar duplicados)
+                const messageExists = state.msg.some(msg => msg.id === action.payload.message.id);
+                
+                if (!messageExists) {
+                    const newMessage = {
+                        id: action.payload.message.id,
+                        types: action.payload.message.role === 'user' ? 'sent' : 'received',
+                        text: action.payload.message.content,
+                        time: new Date(action.payload.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        message_type: action.payload.message.message_type || 'text',
+                        media_url: action.payload.message.media_url,
+                        read: false
+                    };
+                    
+                    updatedMessages = [...state.msg, newMessage];
+                    console.log("Reducer: Mensaje añadido a la lista, total mensajes:", updatedMessages.length);
+                } else {
+                    console.log("Reducer: El mensaje ya existe en la lista, ignorando");
+                }
             }
             
             // Actualizar el contador de mensajes no leídos para la conversación
-            const updatedConversationsWithNewMessage = state.conversations.map(conv => 
-                conv.id === action.payload.message.conversation_id
-                    ? { 
+            const updatedConversationsWithNewMessage = state.conversations.map(conv => {
+                if (conv.id === action.payload.message.conversation_id) {
+                    // Si es la conversación actual y está siendo visualizada, no incrementar contador
+                    const shouldIncrementUnread = conv.id !== state.currentConversationId;
+                    
+                    return { 
                         ...conv, 
-                        unread_count: (Number(conv.unread_count) || 0) + 1,
+                        unread_count: shouldIncrementUnread ? (Number(conv.unread_count) || 0) + 1 : Number(conv.unread_count) || 0,
                         last_message: action.payload.message.content,
                         updated_at: action.payload.message.created_at
-                      }
-                    : conv
-            );
+                    };
+                }
+                return conv;
+            });
             
             // Ordenar las conversaciones: primero las que tienen mensajes no leídos
             const sortedConversationsWithNewMessage = [...updatedConversationsWithNewMessage].sort((a, b) => {
@@ -299,8 +315,17 @@ const chatReducer = (state = chatInitialStates, action) => {
                 return 0;
             });
             
+            console.log("Reducer: Conversaciones actualizadas y ordenadas:", 
+                sortedConversationsWithNewMessage.map(c => ({
+                    id: c.id.substring(0, 8),
+                    unread: c.unread_count,
+                    last_message: c.last_message ? c.last_message.substring(0, 20) + '...' : 'No message'
+                }))
+            );
+            
             return {
                 ...state,
+                msg: action.payload.message.conversation_id === state.currentConversationId ? updatedMessages : state.msg,
                 conversations: sortedConversationsWithNewMessage
             };
             

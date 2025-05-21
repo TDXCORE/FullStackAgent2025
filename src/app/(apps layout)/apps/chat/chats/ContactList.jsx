@@ -147,7 +147,15 @@ const ContactList = ({ invitePeople }) => {
         
     }, [dispatch, states.chatState.contacts, states.chatState.wsConnected, states.chatState.conversations, sortConversations]);
     
-    // Actualizar la lista de contactos cuando cambian las conversaciones o los contactos
+    // Escuchar eventos WebSocket para nuevos mensajes
+    useEffect(() => {
+        // Este efecto se ejecuta cuando hay un nuevo mensaje o cuando se actualiza una conversación
+        if (states.chatState.wsConnected) {
+            console.log("🔄 ContactList: WebSocket conectado, escuchando eventos de nuevos mensajes");
+        }
+    }, [states.chatState.wsConnected]);
+    
+    // Actualizar la lista de contactos cuando cambian las conversaciones, los contactos o llegan nuevos mensajes
     useEffect(() => {
         console.log("🔄 Actualizando lista de contactos basada en conversaciones y contactos...");
         console.log(`Conversaciones: ${states.chatState.conversations?.length || 0}, Contactos: ${states.chatState.contacts?.length || 0}`);

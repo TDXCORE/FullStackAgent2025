@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useMemo, useReducer, useState, useEffect } from 'react';
 import { initialStates, rootReducer } from './reducer/rootReducer';
-import { wsClient, getContacts, getConversations } from '@/services/chatService';
+import { wsClient, getContacts, getConversations, markMessagesAsRead } from '@/services/chatService';
 // import { GlobalReducer, initialStates } from './GlobalReducer';
 
 // Create a new context
@@ -29,7 +29,27 @@ export const GlobalStateProvider = ({ children }) => {
             
             wsClient.on('new_message', (data) => {
                 console.log('Nuevo mensaje recibido:', data);
+                console.log('Detalles del mensaje:', {
+                    id: data.message.id,
+                    conversation_id: data.message.conversation_id,
+                    content: data.message.content ? data.message.content.substring(0, 50) + '...' : 'No content',
+                    role: data.message.role,
+                    created_at: data.message.created_at
+                });
                 dispatch({ type: 'ws_new_message', payload: data });
+                
+                // Si hay una conversación seleccionada y el mensaje pertenece a ella,
+                // marcar los mensajes como leídos automáticamente
+                if (data.message.conversation_id === states.chatState.currentConversationId) {
+                    console.log('El mensaje pertenece a la conversación actual, marcando como leído');
+                    markMessagesAsRead(data.message.conversation_id)
+                        .then(() => {
+                            console.log('Mensajes marcados como leídos exitosamente');
+                        })
+                        .catch(error => {
+                            console.error('Error al marcar mensajes como leídos:', error);
+                        });
+                }
             });
             
             wsClient.on('message_deleted', (data) => {

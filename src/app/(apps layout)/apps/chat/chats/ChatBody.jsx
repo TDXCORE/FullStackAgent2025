@@ -128,13 +128,45 @@ const ChatBody = () => {
             console.log(`ChatBody: WebSocket conectado y conversación seleccionada: ${states.chatState.currentConversationId}`);
             console.log(`ChatBody: Total de mensajes en la conversación: ${states.chatState.msg.length}`);
             
+            // Configurar un intervalo para verificar nuevos mensajes periódicamente
+            const checkInterval = setInterval(async () => {
+                try {
+                    console.log(`ChatBody: Verificando nuevos mensajes para conversación: ${states.chatState.currentConversationId}`);
+                    const latestMessages = await getMessages(states.chatState.currentConversationId);
+                    
+                    // Comparar si hay nuevos mensajes
+                    if (latestMessages.length > states.chatState.msg.length) {
+                        console.log(`ChatBody: Se encontraron ${latestMessages.length - states.chatState.msg.length} nuevos mensajes`);
+                        dispatch({ type: "fetch_messages_success", messages: latestMessages });
+                    }
+                } catch (error) {
+                    console.error("Error al verificar nuevos mensajes:", error);
+                }
+            }, 10000); // Verificar cada 10 segundos
+            
             // Desplazar al último mensaje cuando cambia la lista de mensajes
             setTimeout(() => {
                 console.log("ChatBody: Desplazando al último mensaje");
                 bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
+            
+            // Limpiar intervalo al desmontar
+            return () => {
+                clearInterval(checkInterval);
+            };
         }
-    }, [states.chatState.msg, states.chatState.wsConnected, states.chatState.currentConversationId]);
+    }, [states.chatState.wsConnected, states.chatState.currentConversationId, dispatch]);
+    
+    // Efecto para manejar cambios en la lista de mensajes
+    useEffect(() => {
+        if (states.chatState.msg.length > 0) {
+            // Desplazar al último mensaje cuando cambia la lista de mensajes
+            setTimeout(() => {
+                console.log("ChatBody: Desplazando al último mensaje después de actualización");
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    }, [states.chatState.msg]);
 
     // Update local messages state when redux state changes
     useEffect(() => {
