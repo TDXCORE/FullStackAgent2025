@@ -1,10 +1,3 @@
-import axios from 'axios';
-
-// Base API URL - Usa la variable de entorno si está disponible, de lo contrario usa la ruta relativa
-const API_URL = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_API_BASE_URL 
-  ? window.ENV.NEXT_PUBLIC_API_BASE_URL 
-  : process.env.NEXT_PUBLIC_API_BASE_URL || '/api/chat';
-
 // WebSocket URL - Usa la variable de entorno si está disponible, de lo contrario usa la URL por defecto
 const WS_URL = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_WS_BASE_URL 
   ? window.ENV.NEXT_PUBLIC_WS_BASE_URL 
@@ -33,6 +26,9 @@ class WebSocketClient {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 2000; // 2 segundos
+        this.connectionPromise = null; // Para rastrear la promesa de conexión actual
+        this.pendingMessages = []; // Cola de mensajes pendientes
+        this.connectionTimeout = 10000; // 10 segundos de timeout para la conexión
     }
 
     /**
@@ -40,12 +36,29 @@ class WebSocketClient {
      * @returns {Promise} Promesa que se resuelve cuando la conexión se establece
      */
     connect() {
-        return new Promise((resolve, reject) => {
+        // Si ya hay una conexión en progreso, devolver la promesa existente
+        if (this.connectionPromise) {
+            console.log('Ya hay una conexión en progreso, esperando...');
+            return this.connectionPromise;
+        }
+        
+        // Si ya está conectado, resolver inmediatamente
+        if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
+            console.log('WebSocket ya está conectado, reutilizando conexión existente');
+            return Promise.resolve();
+        }
+        
+        // Crear una nueva promesa de conexión
+        this.connectionPromise = new Promise((resolve, reject) => {
             try {
-                // Si ya está conectado, resolver inmediatamente
-                if (this.isConnected && this.socket) {
-                    resolve();
-                    return;
+                // Limpiar cualquier socket existente
+                if (this.socket) {
+                    try {
+                        this.socket.close();
+                    } catch (e) {
+                        console.log('Error al cerrar socket existente:', e);
+                    }
+                    this.socket = null;
                 }
                 
                 // Construir URL con token si está disponible
@@ -56,12 +69,33 @@ class WebSocketClient {
 
                 console.log(`Conectando a ${url}...`);
                 this.socket = new WebSocket(url);
+                
+                // Configurar timeout para la conexión
+                const timeoutId = setTimeout(() => {
+                    if (!this.isConnected) {
+                        console.error('Timeout de conexión WebSocket');
+                        if (this.socket) {
+                            this.socket.close();
+                        }
+                        this.isConnected = false;
+                        this.connectionPromise = null;
+                        reject(new Error('Timeout de conexión WebSocket'));
+                    }
+                }, this.connectionTimeout);
 
                 // Configurar manejadores de eventos
                 this.socket.onopen = () => {
                     console.log('Conexión WebSocket establecida');
                     this.isConnected = true;
                     this.reconnectAttempts = 0;
+                    clearTimeout(timeoutId);
+                    
+                    // Procesar mensajes pendientes
+                    this._processPendingMessages();
+                    
+                    // Limpiar la promesa de conexión
+                    this.connectionPromise = null;
+                    
                     resolve();
                 };
 
@@ -72,6 +106,9 @@ class WebSocketClient {
                 this.socket.onclose = (event) => {
                     console.log(`Conexión WebSocket cerrada: ${event.code} ${event.reason}`);
                     this.isConnected = false;
+                    clearTimeout(timeoutId);
+                    this.connectionPromise = null;
+                    
                     this._attemptReconnect();
                     
                     // Disparar evento de desconexión
@@ -83,6 +120,10 @@ class WebSocketClient {
 
                 this.socket.onerror = (error) => {
                     console.error('Error en WebSocket:', error);
+                    this.isConnected = false;
+                    clearTimeout(timeoutId);
+                    this.connectionPromise = null;
+                    
                     reject(error);
                     
                     // Disparar evento de error
@@ -92,19 +133,61 @@ class WebSocketClient {
                 };
             } catch (error) {
                 console.error('Error al conectar:', error);
+                this.connectionPromise = null;
                 reject(error);
             }
         });
+        
+        return this.connectionPromise;
+    }
+    
+    /**
+     * Procesa los mensajes pendientes en la cola
+     * @private
+     */
+    _processPendingMessages() {
+        if (this.pendingMessages.length > 0) {
+            console.log(`Procesando ${this.pendingMessages.length} mensajes pendientes...`);
+            
+            // Procesar cada mensaje pendiente
+            while (this.pendingMessages.length > 0) {
+                const pendingMessage = this.pendingMessages.shift();
+                try {
+                    if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
+                        console.log('Enviando mensaje pendiente:', pendingMessage);
+                        this.socket.send(JSON.stringify(pendingMessage.request));
+                    } else {
+                        // Si la conexión se perdió mientras procesábamos, volver a poner el mensaje en la cola
+                        console.log('La conexión se perdió mientras se procesaban mensajes pendientes');
+                        this.pendingMessages.unshift(pendingMessage);
+                        break;
+                    }
+                } catch (error) {
+                    console.error('Error al enviar mensaje pendiente:', error);
+                    // Rechazar la promesa del mensaje pendiente
+                    if (pendingMessage.reject) {
+                        pendingMessage.reject(error);
+                    }
+                }
+            }
+        }
     }
 
     /**
-     * Intenta reconectar al servidor
+     * Intenta reconectar al servidor con backoff exponencial
      * @private
      */
     _attemptReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            console.log(`Intentando reconectar (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            // Usar backoff exponencial para los reintentos
+            const delay = Math.min(
+                this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1),
+                30000 // Máximo 30 segundos
+            );
+            
+            console.log(`Intentando reconectar (${this.reconnectAttempts}/${this.maxReconnectAttempts}) en ${delay/1000} segundos...`);
             
             setTimeout(() => {
                 this.connect()
@@ -117,7 +200,7 @@ class WebSocketClient {
                     .catch((error) => {
                         console.error('Error al reconectar:', error);
                     });
-            }, this.reconnectDelay * this.reconnectAttempts);
+            }, delay);
         } else {
             console.error('Máximo número de intentos de reconexión alcanzado');
             this._triggerEvent('reconnect_failed', {
@@ -226,39 +309,73 @@ class WebSocketClient {
      */
     request(resource, action, data = {}) {
         return new Promise(async (resolve, reject) => {
-            // Asegurar que estamos conectados antes de enviar la solicitud
-            if (!this.isConnected) {
-                try {
-                    await this.connect();
-                } catch (error) {
-                    reject(new Error('No se pudo conectar al servidor WebSocket'));
-                    return;
-                }
-            }
-
-            const id = this._generateId();
-            const request = {
-                type: 'request',
-                id: id,
-                resource: resource,
-                payload: {
-                    action: action,
-                    ...data
-                }
-            };
-
-            // Registrar handler para la respuesta
-            this.responseHandlers[id] = (response) => {
-                if (response.type === 'error') {
-                    reject(new Error(response.payload?.message || 'Error desconocido'));
+            try {
+                const id = this._generateId();
+                const request = {
+                    type: 'request',
+                    id: id,
+                    resource: resource,
+                    payload: {
+                        action: action,
+                        ...data
+                    }
+                };
+                
+                // Registrar handler para la respuesta
+                this.responseHandlers[id] = (response) => {
+                    if (response.type === 'error') {
+                        reject(new Error(response.payload?.message || 'Error desconocido'));
+                    } else {
+                        resolve(response.payload);
+                    }
+                };
+                
+                // Verificar el estado de la conexión
+                if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+                    console.log('WebSocket no conectado, intentando conectar antes de enviar solicitud...');
+                    
+                    // Añadir el mensaje a la cola de pendientes
+                    console.log('Añadiendo solicitud a la cola de mensajes pendientes:', request);
+                    this.pendingMessages.push({
+                        request,
+                        resolve,
+                        reject
+                    });
+                    
+                    try {
+                        // Intentar conectar
+                        await this.connect();
+                        
+                        // La conexión fue exitosa, los mensajes pendientes se procesarán automáticamente
+                        // en el manejador onopen
+                    } catch (connectError) {
+                        console.error('Error al conectar WebSocket:', connectError);
+                        reject(new Error('No se pudo conectar al servidor WebSocket'));
+                        return;
+                    }
                 } else {
-                    resolve(response.payload);
+                    // Si ya estamos conectados, enviar la solicitud directamente
+                    console.log('Enviando solicitud:', request);
+                    try {
+                        this.socket.send(JSON.stringify(request));
+                    } catch (sendError) {
+                        console.error('Error al enviar solicitud:', sendError);
+                        
+                        // Si hay un error al enviar, intentar reconectar y añadir a la cola
+                        this.isConnected = false;
+                        this.pendingMessages.push({
+                            request,
+                            resolve,
+                            reject
+                        });
+                        
+                        this._attemptReconnect();
+                    }
                 }
-            };
-
-            // Enviar solicitud
-            console.log('Enviando solicitud:', request);
-            this.socket.send(JSON.stringify(request));
+            } catch (error) {
+                console.error('Error en request:', error);
+                reject(error);
+            }
         });
     }
 
@@ -456,17 +573,8 @@ export const getContacts = async () => {
     return contacts;
   } catch (error) {
     console.error('Error fetching contacts via WebSocket:', error);
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      console.log('Fallback: Fetching contacts from REST API');
-      const response = await axios.get(`${API_URL}/users`);
-      console.log(`Received ${response.data.length} contacts via REST API`);
-      return response.data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Devolver un array vacío en lugar de propagar el error
-      return [];
-    }
+    // Devolver un array vacío en lugar de propagar el error
+    return [];
   }
 };
 
@@ -517,19 +625,8 @@ export const getConversations = async (userId) => {
     return normalizedConversations;
   } catch (error) {
     console.error('Error fetching conversations via WebSocket:', error);
-    
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      console.log(`Fallback: Fetching conversations from: ${API_URL}/conversations?user_id=${userId}`);
-      const response = await axios.get(`${API_URL}/conversations?user_id=${userId}`);
-      const data = response.data || [];
-      console.log(`Received ${data.length} conversations via REST API:`, data);
-      return data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Devolver un array vacío en lugar de propagar el error
-      return [];
-    }
+    // Devolver un array vacío en lugar de propagar el error
+    return [];
   }
 };
 
@@ -548,7 +645,7 @@ export const createConversation = async (userId, externalId, platform = 'web') =
       throw new Error('User ID and External ID are required');
     }
     
-    // Usar WebSocket en lugar de REST API
+    // Usar WebSocket
     const result = await wsClient.createConversation({
       created_by: userId,
       external_id: externalId,
@@ -559,25 +656,7 @@ export const createConversation = async (userId, externalId, platform = 'web') =
     return result.conversation;
   } catch (error) {
     console.error('Error creating conversation via WebSocket:', error);
-    
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      const response = await axios.post(`${API_URL}/conversations`, {
-        user_id: userId,
-        external_id: externalId,
-        platform,
-        status: 'active'
-      });
-      return response.data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Return a more informative error message
-      if (fallbackError.response && fallbackError.response.status === 422) {
-        console.error('Validation error:', fallbackError.response.data);
-        throw new Error(`Validation error: ${JSON.stringify(fallbackError.response.data)}`);
-      }
-      throw error; // Lanzar el error original de WebSocket
-    }
+    throw error;
   }
 };
 
@@ -624,18 +703,8 @@ export const getMessages = async (conversationId) => {
     return messages;
   } catch (error) {
     console.error('Error fetching messages via WebSocket:', error);
-    
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      console.log(`Fallback: Fetching messages from: ${API_URL}/messages?conversation_id=${conversationId}`);
-      const response = await axios.get(`${API_URL}/messages?conversation_id=${conversationId}`);
-      console.log(`Received ${response.data.length} messages via REST API`);
-      return response.data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Devolver un array vacío en lugar de propagar el error
-      return [];
-    }
+    // Devolver un array vacío en lugar de propagar el error
+    return [];
   }
 };
 
@@ -686,26 +755,7 @@ export const sendMessage = async (conversationId, content, messageType = 'text',
     return message;
   } catch (error) {
     console.error('Error sending message via WebSocket:', error);
-    
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      console.log(`Fallback: Sending message via REST API to: ${API_URL}/messages`);
-      const response = await axios.post(`${API_URL}/messages`, {
-        conversation_id: conversationId,
-        content,
-        message_type: messageType,
-        media_url: mediaUrl
-      });
-      console.log(`Message sent successfully via REST API with ID: ${response.data.id}`);
-      return response.data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Devolver un objeto de error en lugar de propagar el error
-      return {
-        error: true,
-        message: error.message || 'Error al enviar mensaje'
-      };
-    }
+    throw error;
   }
 };
 
@@ -717,12 +767,32 @@ export const sendMessage = async (conversationId, content, messageType = 'text',
  */
 export const toggleAgent = async (conversationId, enable) => {
   try {
-    // Cambiar a usar parámetros de consulta en lugar de un cuerpo JSON
-    const response = await axios.put(`${API_URL}/conversations/${conversationId}/agent?enable=${enable}`);
-    console.log('Toggle agent response:', response.data);
-    return response.data;
+    console.log(`Toggling agent for conversation: ${conversationId} to ${enable ? 'enabled' : 'disabled'} via WebSocket`);
+    
+    // Verificar si el WebSocket está conectado
+    if (!wsClient.isConnected) {
+      console.log('WebSocket no conectado, intentando conectar...');
+      try {
+        await wsClient.connect();
+        console.log('WebSocket conectado exitosamente');
+      } catch (connectError) {
+        console.error('Error al conectar WebSocket:', connectError);
+        throw new Error('No se pudo conectar al WebSocket');
+      }
+    }
+    
+    // Usar WebSocket para actualizar la conversación
+    const result = await wsClient.request('conversations', 'update', {
+      conversation_id: conversationId,
+      conversation: {
+        agent_enabled: enable
+      }
+    });
+    
+    console.log('Respuesta completa de WebSocket para toggle agent:', result);
+    return result;
   } catch (error) {
-    console.error('Error toggling agent:', error);
+    console.error('Error toggling agent via WebSocket:', error);
     throw error;
   }
 };
@@ -758,20 +828,6 @@ export const markMessagesAsRead = async (conversationId) => {
     return result;
   } catch (error) {
     console.error('Error marking messages as read via WebSocket:', error);
-    
-    // Intentar fallback a REST API si WebSocket falla
-    try {
-      console.log(`Fallback: Marking messages as read via REST API: ${API_URL}/messages/read?conversation_id=${conversationId}`);
-      const response = await axios.put(`${API_URL}/messages/read?conversation_id=${conversationId}`);
-      console.log('Messages marked as read successfully via REST API');
-      return response.data;
-    } catch (fallbackError) {
-      console.error('Fallback REST API also failed:', fallbackError);
-      // Devolver un objeto de éxito falso en lugar de propagar el error
-      return {
-        success: false,
-        error: error.message || 'Error al marcar mensajes como leídos'
-      };
-    }
+    throw error;
   }
 };
