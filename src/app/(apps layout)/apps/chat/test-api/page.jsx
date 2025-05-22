@@ -290,6 +290,37 @@ const TestApiPage = () => {
       <h2>API Test Tool</h2>
       <p className="text-muted">Use this tool to test the chat API endpoints directly</p>
       
+      <Row className="mb-3">
+        <Col md={12}>
+          <Card>
+            <Card.Body className="d-flex align-items-center">
+              <div className="me-3">
+                <strong>Data Mode:</strong>{' '}
+                <Badge bg={typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' ? 'warning' : 'success'}>
+                  {typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' ? 'Mock Data' : 'Real Data'}
+                </Badge>
+              </div>
+              <Button 
+                variant="outline-primary" 
+                size="sm"
+                onClick={() => {
+                  const currentMode = window.localStorage.getItem('USE_MOCK_DATA') === 'true';
+                  window.localStorage.setItem('USE_MOCK_DATA', (!currentMode).toString());
+                  addLog(`Switched to ${!currentMode ? 'Mock Data' : 'Real Data'} mode. Refresh the page to apply changes.`);
+                  // Force reload to apply changes
+                  window.location.reload();
+                }}
+              >
+                Toggle Data Mode
+              </Button>
+              <div className="ms-3 text-muted small">
+                (Changes require page refresh)
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+      
       <Row className="mb-4">
         <Col md={12}>
           <Card>

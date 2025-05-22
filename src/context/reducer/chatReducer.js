@@ -27,7 +27,11 @@ export const chatInitialStates = {
     agentEnabled: true,
     // WebSocket states
     wsConnected: false,
-    wsClientId: null
+    wsClientId: null,
+    wsUserId: null,
+    lastHeartbeat: null,
+    // Mensajes precargados por conversación
+    preloadedMessages: {}
 }
 
 const chatReducer = (state = chatInitialStates, action) => {
@@ -255,13 +259,21 @@ const chatReducer = (state = chatInitialStates, action) => {
             return {
                 ...state,
                 wsConnected: true,
-                wsClientId: action.payload.client_id
+                wsClientId: action.payload.client_id,
+                wsUserId: action.payload.user_id
             };
             
         case "ws_disconnected":
             return {
                 ...state,
-                wsConnected: false
+                wsConnected: false,
+                // No reseteamos wsClientId ni wsUserId para poder mostrarlos en la UI
+            };
+            
+        case "heartbeat":
+            return {
+                ...state,
+                lastHeartbeat: action.payload.timestamp
             };
             
         case "ws_new_message":
@@ -284,13 +296,35 @@ const chatReducer = (state = chatInitialStates, action) => {
                         time: new Date(action.payload.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                         message_type: action.payload.message.message_type || 'text',
                         media_url: action.payload.message.media_url,
-                        read: false
+                        read: action.payload.message.read || false
                     };
                     
                     updatedMessages = [...state.msg, newMessage];
                     console.log("Reducer: Mensaje añadido a la lista, total mensajes:", updatedMessages.length);
                 } else {
                     console.log("Reducer: El mensaje ya existe en la lista, ignorando");
+                }
+            } else {
+                // Si el mensaje pertenece a otra conversación, actualizar los mensajes precargados
+                const preloadedMessagesForConv = state.preloadedMessages[action.payload.message.conversation_id] || [];
+                const messageExistsInPreloaded = preloadedMessagesForConv.some(msg => msg.id === action.payload.message.id);
+                
+                if (!messageExistsInPreloaded) {
+                    const newMessage = {
+                        id: action.payload.message.id,
+                        types: action.payload.message.role === 'user' ? 'sent' : 'received',
+                        text: action.payload.message.content,
+                        time: new Date(action.payload.message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        message_type: action.payload.message.message_type || 'text',
+                        media_url: action.payload.message.media_url,
+                        read: action.payload.message.read || false
+                    };
+                    
+                    // Actualizar los mensajes precargados para esta conversación
+                    state.preloadedMessages = {
+                        ...state.preloadedMessages,
+                        [action.payload.message.conversation_id]: [...preloadedMessagesForConv, newMessage]
+                    };
                 }
             }
             
@@ -310,8 +344,26 @@ const chatReducer = (state = chatInitialStates, action) => {
                 return conv;
             });
             
+            // Verificar si la conversación ya existe, si no, añadirla
+            const conversationExists = state.conversations.some(conv => conv.id === action.payload.message.conversation_id);
+            
+            let finalConversations = updatedConversationsWithNewMessage;
+            
+            if (!conversationExists && action.payload.conversation) {
+                // Añadir la nueva conversación
+                finalConversations = [
+                    {
+                        ...action.payload.conversation,
+                        unread_count: 1,
+                        last_message: action.payload.message.content,
+                        updated_at: action.payload.message.created_at
+                    },
+                    ...updatedConversationsWithNewMessage
+                ];
+            }
+            
             // Ordenar las conversaciones: primero las que tienen mensajes no leídos
-            const sortedConversationsWithNewMessage = [...updatedConversationsWithNewMessage].sort((a, b) => {
+            const sortedConversationsWithNewMessage = [...finalConversations].sort((a, b) => {
                 // Asegurar que unread_count sea un número
                 const aUnread = Number(a.unread_count || 0);
                 const bUnread = Number(b.unread_count || 0);
@@ -338,7 +390,8 @@ const chatReducer = (state = chatInitialStates, action) => {
             return {
                 ...state,
                 msg: action.payload.message.conversation_id === state.currentConversationId ? updatedMessages : state.msg,
-                conversations: sortedConversationsWithNewMessage
+                conversations: sortedConversationsWithNewMessage,
+                preloadedMessages: state.preloadedMessages
             };
             
         case "ws_message_deleted":

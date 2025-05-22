@@ -8,8 +8,8 @@ import { Dropdown, Form, ListGroup, Badge } from 'react-bootstrap';
 import { useWindowWidth } from '@react-hook/window-size';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
 import { getContacts, getConversations, markMessagesAsRead, wsClient } from '@/services/chatService';
-// Keep as fallback
-import defaultContacts from '@/data/chat/contact-list';
+// No longer using fallback data
+// import defaultContacts from '@/data/chat/contact-list';
 
 //Images
 import avatar1 from '@/assets/img/avatar1.jpg';
@@ -61,16 +61,40 @@ const ContactList = ({ invitePeople }) => {
         const fetchContacts = async () => {
             try {
                 dispatch({ type: "fetch_contacts_request" });
+                
+                // Ensure WebSocket is connected before fetching contacts
+                if (!wsClient.isConnected) {
+                    console.log("WebSocket no conectado, conectando antes de obtener contactos...");
+                    try {
+                        await wsClient.connect();
+                        console.log("WebSocket conectado exitosamente");
+                    } catch (connectError) {
+                        console.error("Error al conectar WebSocket:", connectError);
+                        // Don't throw here, try to fetch contacts anyway
+                    }
+                }
+                
+                console.log("Obteniendo contactos desde el servidor...");
                 const contactsData = await getContacts();
+                console.log(`Contactos obtenidos: ${contactsData.length}`, contactsData);
+                
                 dispatch({ type: "fetch_contacts_success", contacts: contactsData });
                 setList(contactsData);
                 setLoading(false);
             } catch (error) {
                 console.error("Error fetching contacts:", error);
                 dispatch({ type: "fetch_contacts_failure", error: error.message });
-                // Fallback to default contacts if API fails
-                setList(defaultContacts);
+                // No longer falling back to default contacts
                 setLoading(false);
+                
+                // Show empty list instead of mock data
+                setList([]);
+                
+                // Try to reconnect WebSocket
+                if (!wsClient.isConnected) {
+                    console.log("Intentando reconectar WebSocket después de error...");
+                    wsClient.connect().catch(e => console.error("Error al reconectar:", e));
+                }
             }
         };
         
@@ -126,8 +150,14 @@ const ContactList = ({ invitePeople }) => {
 
                     // Verificar que tenemos datos válidos
                     if (uniqueConversations && Array.isArray(uniqueConversations) && uniqueConversations.length > 0) {
+                        // Asegurar que unread_count sea un número en todas las conversaciones
+                        const normalizedConversations = uniqueConversations.map(conv => ({
+                            ...conv,
+                            unread_count: Number(conv.unread_count || 0)
+                        }));
+                        
                         // Ordenar conversaciones (no leídas primero)
-                        const sortedConversations = sortConversations(uniqueConversations);
+                        const sortedConversations = sortConversations(normalizedConversations);
                         console.log("Enviando conversaciones ordenadas al estado global:", sortedConversations.length);
                         dispatch({ type: "fetch_conversations_success", conversations: sortedConversations });
                     } else {
@@ -420,8 +450,8 @@ const ContactList = ({ invitePeople }) => {
 
     const searchOnChange = (event) => {
         setSearchValue(event.target.value);
-        // Create copy of item list from state.contacts or fallback to defaultContacts
-        const contactsToSearch = states.chatState.contacts.length > 0 ? states.chatState.contacts : defaultContacts;
+        // Create copy of item list from state.contacts (no fallback)
+        const contactsToSearch = states.chatState.contacts.length > 0 ? states.chatState.contacts : [];
         var updatedList = [...contactsToSearch];
         // Include all elements which includes the search query
         updatedList = updatedList.filter((item) => 
@@ -432,6 +462,14 @@ const ContactList = ({ invitePeople }) => {
         // Trigger render with updated values
         setList(updatedList);
     }
+    
+    // Function to toggle mock data mode
+    const toggleMockData = () => {
+        const currentMode = localStorage.getItem('USE_MOCK_DATA') === 'true';
+        localStorage.setItem('USE_MOCK_DATA', (!currentMode).toString());
+        alert(`Switched to ${!currentMode ? 'Mock Data' : 'Real Data'} mode. The page will reload.`);
+        window.location.reload();
+    }
 
     return (
         <>
@@ -440,6 +478,11 @@ const ContactList = ({ invitePeople }) => {
                     <Dropdown>
                         <Dropdown.Toggle as="a" className="chatapp-title link-dark" href="#" >
                             <h1>Chat</h1>
+                            {typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' && (
+                                <Badge bg="warning" className="ms-2" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>
+                                    MOCK DATA
+                                </Badge>
+                            )}
                         </Dropdown.Toggle>
                         <Dropdown.Menu>
                             <Dropdown.Item as={Link} href="chats">
@@ -514,10 +557,17 @@ const ContactList = ({ invitePeople }) => {
                                 <Dropdown.Item href="#">Report a problem	</Dropdown.Item>
                             </Dropdown.Menu>
                         </Dropdown>
-                        <a className="btn btn-icon btn-rounded btn-primary" onClick={invitePeople} >
+                        <a className="btn btn-icon btn-rounded btn-primary me-1" onClick={invitePeople} >
                             <span className="icon">
                                 <span className="feather-icon">
                                     <Icons.Plus />
+                                </span>
+                            </span>
+                        </a>
+                        <a className="btn btn-icon btn-rounded btn-warning" onClick={toggleMockData} title="Toggle between mock and real data">
+                            <span className="icon">
+                                <span className="feather-icon">
+                                    <Icons.Database />
                                 </span>
                             </span>
                         </a>
@@ -594,6 +644,7 @@ const ContactList = ({ invitePeople }) => {
                                         fontWeight: "bold"
                                     } : {}}
                                     data-unread={elem.unread > 0 ? 'true' : 'false'}
+                                    data-conversation-id={elem.conversationId || 'none'}
                                 >
                                     <div className={classNames("media", { "active-user": elem.id === states.chatState.userId }, { "read-chat": !elem.unread })}>
                                         <div className="media-head">
@@ -624,11 +675,15 @@ const ContactList = ({ invitePeople }) => {
                                                             className="ms-1" 
                                                             style={{ fontSize: '0.6rem', verticalAlign: 'middle' }}
                                                         >
-                                                            Nuevo
+                                                            {elem.unread > 1 ? `${elem.unread} nuevos` : 'Nuevo'}
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <div className="user-last-chat">{elem.lastChat}</div>
+                                                <div className="user-last-chat" title={elem.lastChat}>
+                                                    {elem.lastChat && elem.lastChat.length > 30 
+                                                        ? `${elem.lastChat.substring(0, 30)}...` 
+                                                        : elem.lastChat || "Click to start conversation"}
+                                                </div>
                                             </div>
                                             <div>
                                                 <div className="last-chat-time">{elem.time}</div>

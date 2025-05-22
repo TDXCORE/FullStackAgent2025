@@ -1,7 +1,7 @@
 'use client';
-import { createContext, useContext, useMemo, useReducer, useState, useEffect } from 'react';
+import { createContext, useContext, useMemo, useReducer, useState, useEffect, useRef } from 'react';
 import { initialStates, rootReducer } from './reducer/rootReducer';
-import { wsClient, getContacts, getConversations, markMessagesAsRead } from '@/services/chatService';
+import { wsClient, getContacts, getConversations, getMessages, markMessagesAsRead } from '@/services/chatService';
 // import { GlobalReducer, initialStates } from './GlobalReducer';
 
 // Create a new context
@@ -25,6 +25,12 @@ export const GlobalStateProvider = ({ children }) => {
             wsClient.on('disconnect', (data) => {
                 console.log('Desconectado del servidor:', data);
                 dispatch({ type: 'ws_disconnected', payload: data });
+            });
+            
+            // Manejar heartbeats
+            wsClient.on('heartbeat', (data) => {
+                console.log('💓 Heartbeat recibido:', data.timestamp);
+                dispatch({ type: 'heartbeat', payload: data });
             });
             
             wsClient.on('new_message', (data) => {
@@ -71,6 +77,12 @@ export const GlobalStateProvider = ({ children }) => {
                 console.log('Usuario actualizado:', data);
                 dispatch({ type: 'ws_user_updated', payload: data });
             });
+            
+            // Manejar errores del WebSocket
+            wsClient.on('error', (data) => {
+                console.error('Error en WebSocket:', data);
+                // No actualizamos el estado para errores, pero podríamos hacerlo si fuera necesario
+            });
         }).catch(error => {
             console.error('Error al conectar WebSocket:', error);
         });
@@ -81,10 +93,14 @@ export const GlobalStateProvider = ({ children }) => {
         };
     }, [dispatch]);
     
+    // Referencia para rastrear si los datos iniciales ya se han cargado
+    const initialDataLoadedRef = useRef(false);
+    
     // Cargar datos iniciales cuando el WebSocket está conectado
     useEffect(() => {
-        if (states.chatState.wsConnected) {
+        if (states.chatState.wsConnected && !initialDataLoadedRef.current) {
             console.log('🔄 WebSocket conectado, cargando datos iniciales...');
+            initialDataLoadedRef.current = true; // Marcar como cargado para evitar múltiples cargas
             
             // Cargar contactos iniciales
             const loadInitialData = async () => {
@@ -92,15 +108,7 @@ export const GlobalStateProvider = ({ children }) => {
                     console.log('🔄 Cargando contactos iniciales...');
                     dispatch({ type: 'fetch_contacts_request' });
                     
-                    // Forzar reconexión del WebSocket para asegurar conexión fresca
-                    if (wsClient.isConnected) {
-                        console.log('🔄 Reconectando WebSocket para asegurar conexión fresca...');
-                        await wsClient.disconnect();
-                        await new Promise(resolve => setTimeout(resolve, 500)); // Esperar 500ms
-                    }
-                    
-                    await wsClient.connect();
-                    console.log('🔄 WebSocket reconectado exitosamente');
+                    // Ya no reconectamos el WebSocket aquí para evitar el bucle infinito
                     
                     const contacts = await getContacts();
                     console.log('✅ Contactos cargados:', contacts.length);
@@ -270,7 +278,7 @@ export const GlobalStateProvider = ({ children }) => {
                 clearInterval(refreshInterval);
             };
         }
-    }, [states.chatState.wsConnected, dispatch, states.chatState.currentConversationId, states.chatState.contacts, states.chatState.msg, states.chatState.conversations]);
+    }, [states.chatState.wsConnected, dispatch]); // Reducimos las dependencias para evitar ejecuciones innecesarias
 
     const ContextValue = useMemo(() => {
         return { states, dispatch };

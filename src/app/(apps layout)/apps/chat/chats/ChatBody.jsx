@@ -2,10 +2,11 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { Button, Dropdown } from 'react-bootstrap';
-import { ArrowDown, CornerUpRight, MoreHorizontal } from 'react-feather';
+import { ArrowDown, CornerUpRight, MoreHorizontal, Database } from 'react-feather';
 import SimpleBar from 'simplebar-react';
 import { useGlobalStateContext } from '@/context/GolobalStateProvider';
 import { getMessages, markMessagesAsRead, wsClient } from '@/services/chatService';
+import * as Icons from 'react-feather';
 
 //Images
 
@@ -47,6 +48,10 @@ const ChatBody = () => {
                             console.error("Error al conectar WebSocket:", connectError);
                         }
                     }
+                    
+                    // Verificar si estamos usando datos simulados
+                    const usingMockData = typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true';
+                    console.log(`ChatBody: Usando ${usingMockData ? 'datos simulados' : 'datos reales'} para obtener mensajes`);
                     
                     const messagesData = await getMessages(states.chatState.currentConversationId);
                     console.log(`ChatBody: ${messagesData.length} mensajes obtenidos para conversación ${states.chatState.currentConversationId}`);
@@ -231,6 +236,13 @@ const ChatBody = () => {
                 {states.chatState.currentConversationId && messages.length === 0 && (
                     <li className="text-center p-4">
                         <p className="text-muted">No hay mensajes en esta conversación</p>
+                        {typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' && (
+                            <div className="alert alert-warning mt-3">
+                                <small>
+                                    <strong>Modo de datos simulados activado.</strong> Para ver datos reales, haz clic en el botón <Database size={14} /> en la barra superior.
+                                </small>
+                            </div>
+                        )}
                     </li>
                 )}
                 
@@ -259,7 +271,18 @@ const ChatBody = () => {
                             <div className="msg-box" id="msg-1" >
                                 <div>
                                     <p>{elem.text}</p>
-                                    <span className="chat-time">{elem.time}</span>
+                                    <span className="chat-time">
+                                        {elem.time}
+                                        {elem.types === "sent" && (
+                                            <span className="ms-1" title={elem.read ? "Leído" : "Enviado"}>
+                                                {elem.read ? (
+                                                    <span style={{ color: '#34c759' }}>✓✓</span>
+                                                ) : (
+                                                    <span style={{ color: '#8e8e93' }}>✓</span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </span>
                                 </div>
                                 <div className="msg-action">
                                     <Button className="btn-icon btn-flush-dark btn-rounded flush-soft-hover no-caret">
