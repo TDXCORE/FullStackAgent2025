@@ -6,7 +6,7 @@ import avatar8 from '@/assets/img/avatar8.jpg';
 export const chatInitialStates = {
     startChat: false,
     avatar: { type: "img", src: avatar8 },
-    userId: 2,
+    userId: null,
     userName: "Huma Therman",
     msg: [],
     contactMsg: [],
@@ -156,6 +156,11 @@ const chatReducer = (state = chatInitialStates, action) => {
             };
         case "fetch_messages_success":
             console.log(`Reducer: fetch_messages_success - Recibidos ${action.messages.length} mensajes`);
+            console.log(`Reducer: Mensajes actualizados en estado global:`, action.messages.map(m => ({
+                id: m.id,
+                text: m.text ? m.text.substring(0, 20) + '...' : 'No text',
+                types: m.types
+            })));
             return {
                 ...state,
                 loading: false,

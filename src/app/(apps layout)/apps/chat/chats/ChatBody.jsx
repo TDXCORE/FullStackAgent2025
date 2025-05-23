@@ -12,8 +12,10 @@ import * as Icons from 'react-feather';
 
 const ChatBody = () => {
     const { states, dispatch } = useGlobalStateContext();
-    const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(false);
+    
+    // Use messages directly from global state instead of local state
+    const messages = states.chatState.msg || [];
 
     // Verificar si el WebSocket está conectado
     useEffect(() => {
@@ -32,7 +34,7 @@ const ChatBody = () => {
     // Fetch messages when conversation ID changes
     useEffect(() => {
         const fetchMessages = async () => {
-            if (states.chatState.currentConversationId) {
+            if (states.chatState.currentConversationId && states.chatState.currentConversationId !== null) {
                 try {
                     console.log(`ChatBody: Obteniendo mensajes para conversación ID: ${states.chatState.currentConversationId}`);
                     setLoading(true);
@@ -212,10 +214,6 @@ const ChatBody = () => {
         }
     }, [states.chatState.msg]);
 
-    // Update local messages state when redux state changes
-    useEffect(() => {
-        setMessages(states.chatState.msg);
-    }, [states.chatState.msg]);
 
     // 👇️ scroll to bottom every time messages change
     const bottomRef = useRef(null);

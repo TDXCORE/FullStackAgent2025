@@ -411,6 +411,13 @@ class WebSocketClient {
 // Crear una instancia global del cliente WebSocket
 export const wsClient = new WebSocketClient(WS_URL, WS_TOKEN);
 
+// Helper para validar UUID (simple)
+const isValidUUID = (uuid) => {
+    if (typeof uuid !== 'string') return false;
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    return uuidRegex.test(uuid);
+};
+
 /**
  * Get all contacts/users
  * @returns {Promise<Array>} Array of contacts
@@ -481,6 +488,10 @@ export const getContacts = async () => {
  * @returns {Promise<Array>} Array of conversations
  */
 export const getConversations = async (userId) => {
+  if (!isValidUUID(userId)) {
+    console.warn(`[chatService] getConversations: Se intentó obtener conversaciones con un userId inválido (no UUID): ${userId}. Se devolverá una lista vacía.`);
+    return [];
+  }
   try {
     console.log(`Fetching conversations for user: ${userId} via WebSocket`);
     
