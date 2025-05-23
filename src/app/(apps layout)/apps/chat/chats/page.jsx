@@ -42,11 +42,15 @@ const Chats = () => {
                     
                     // If no conversations exist, create one
                     if (conversations.length === 0) {
-                        const newConversation = await createConversation(
-                            states.chatState.userId,
-                            `web-${Date.now()}`, // Generate a unique external ID
-                            'web'
-                        );
+                        const newConversationData = {
+                            user_id: states.chatState.userId, // Asegúrate que este sea el ID del usuario que crea o al que se asigna
+                            external_id: `web-${Date.now()}`, // ID externo único
+                            // Podrías añadir otros campos necesarios aquí, por ejemplo:
+                            // created_by: states.chatState.userId, // Si es diferente de user_id
+                            // status: 'active', // O el estado inicial por defecto
+                            source: 'web' // O como se llame el campo para el tipo 'web'
+                        };
+                        const newConversation = await createConversation(newConversationData);
                         
                         // Add the new conversation to the state
                         dispatch({ 
