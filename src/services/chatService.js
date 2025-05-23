@@ -1,13 +1,6 @@
 // Configuración para modo de desarrollo y fallback
 const IS_DEV_MODE = process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && window.location.hostname === 'localhost');
 
-// Permitir configurar el uso de datos simulados a través de una variable de entorno o localStorage
-const USE_MOCK_DATA = typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' 
-  ? true 
-  : false; // Por defecto, usar datos reales
-
-console.log(`🔧 Modo: ${IS_DEV_MODE ? 'Desarrollo' : 'Producción'}, Usando datos simulados: ${USE_MOCK_DATA}`);
-
 // WebSocket URL - Usa la variable de entorno si está disponible, de lo contrario usa la URL por defecto
 const WS_URL = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_WS_BASE_URL 
   ? window.ENV.NEXT_PUBLIC_WS_BASE_URL 
@@ -23,80 +16,8 @@ const getFullWsUrl = (baseUrl) => {
 // WebSocket Auth Token
 const WS_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NDc3OTU1NjUsImV4cCI6MTc3OTMzMTU2NSwiYXVkIjoid3d3LmV4YW1wbGUuY29tIiwic3ViIjoianJvY2tldEBleGFtcGxlLmNvbSIsIkdpdmVuTmFtZSI6IkpvaG5ueSIsIlN1cm5hbWUiOiJSb2NrZXQiLCJFbWFpbCI6Impyb2NrZXRAZXhhbXBsZS5jb20iLCJSb2xlIjpbIk1hbmFnZXIiLCJQcm9qZWN0IEFkbWluaXN0cmF0b3IiXX0.JX6CXcJ5KWr9Omnyyf4xlIRYlDCIefbxz9StLAe4gqY';
 
-// Datos simulados para desarrollo
-const MOCK_DATA = {
-  users: [
-    { id: 'user-1', full_name: 'John Doe', phone: '+1234567890', email: 'john@example.com', created_at: new Date().toISOString() },
-    { id: 'user-2', full_name: 'Jane Smith', phone: '+0987654321', email: 'jane@example.com', created_at: new Date().toISOString() },
-    { id: 'user-3', full_name: 'Bob Johnson', phone: '+1122334455', email: 'bob@example.com', created_at: new Date().toISOString() }
-  ],
-  conversations: [
-    { 
-      id: 'conv-1', 
-      external_id: 'ext-1', 
-      created_by: 'user-1', 
-      unread_count: 2, 
-      last_message: 'Hello there!', 
-      updated_at: new Date().toISOString(),
-      status: 'active'
-    },
-    { 
-      id: 'conv-2', 
-      external_id: 'ext-2', 
-      created_by: 'user-2', 
-      unread_count: 0, 
-      last_message: 'How are you?', 
-      updated_at: new Date(Date.now() - 3600000).toISOString(),
-      status: 'active'
-    }
-  ],
-  messages: {
-    'conv-1': [
-      { 
-        id: 'msg-1', 
-        conversation_id: 'conv-1', 
-        content: 'Hello there!', 
-        role: 'user', 
-        created_at: new Date().toISOString(), 
-        read: false,
-        message_type: 'text'
-      },
-      { 
-        id: 'msg-2', 
-        conversation_id: 'conv-1', 
-        content: 'Hi! How can I help you?', 
-        role: 'assistant', 
-        created_at: new Date(Date.now() - 60000).toISOString(), 
-        read: true,
-        message_type: 'text'
-      }
-    ],
-    'conv-2': [
-      { 
-        id: 'msg-3', 
-        conversation_id: 'conv-2', 
-        content: 'How are you?', 
-        role: 'user', 
-        created_at: new Date(Date.now() - 3600000).toISOString(), 
-        read: true,
-        message_type: 'text'
-      },
-      { 
-        id: 'msg-4', 
-        conversation_id: 'conv-2', 
-        content: 'I\'m doing well, thanks for asking!', 
-        role: 'assistant', 
-        created_at: new Date(Date.now() - 3540000).toISOString(), 
-        read: true,
-        message_type: 'text'
-      }
-    ]
-  }
-};
-
 /**
  * Cliente WebSocket para comunicarse con el servidor
- * Con soporte para modo de desarrollo con datos simulados
  */
 class WebSocketClient {
   constructor(baseUrl, token = null) {
@@ -108,40 +29,14 @@ class WebSocketClient {
     this.userId = null;
     this.eventListeners = {};
     this.responseHandlers = {};
-    this.useMockData = USE_MOCK_DATA;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 2000; // 2 segundos iniciales
     this.heartbeatInterval = null;
     this.lastHeartbeat = null;
-    
-    // Si estamos en modo de datos simulados, simular una conexión exitosa
-    if (this.useMockData) {
-      console.log('🔶 Usando modo de datos simulados para desarrollo');
-      this.isConnected = true;
-      this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-    }
   }
 
   connect() {
-    if (this.useMockData) {
-      console.log('🔶 Modo de datos simulados: simulando conexión exitosa');
-      this.isConnected = true;
-      this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-      
-      // Simular evento de conexión
-      this._triggerEvent('connect', {
-        client_id: this.clientId,
-        user_id: 'mock-user',
-        timestamp: new Date().toISOString()
-      });
-      
-      // Iniciar heartbeats simulados
-      this._startMockHeartbeats();
-      
-      return Promise.resolve();
-    }
-    
     return new Promise((resolve, reject) => {
       try {
         // Limpiar cualquier conexión existente
@@ -244,80 +139,27 @@ class WebSocketClient {
             timestamp: new Date().toISOString()
           });
           
-          if (IS_DEV_MODE) {
-            console.log('🔶 Conexión cerrada en modo desarrollo, activando modo de datos simulados');
-            this.useMockData = true;
-            this.isConnected = true;
-            this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-          } else {
-            // Intentar reconectar automáticamente si no fue un cierre limpio
-            if (event.code !== 1000 && event.code !== 1001) {
-              this._attemptReconnect();
-            }
+          // Intentar reconectar automáticamente si no fue un cierre limpio
+          if (event.code !== 1000 && event.code !== 1001) {
+            this._attemptReconnect();
           }
         };
 
         this.socket.onerror = (error) => {
           console.error('❌ Error en WebSocket:', error);
           this.isConnected = false;
-          
-          if (IS_DEV_MODE) {
-            console.log('🔶 Error de conexión en modo desarrollo, activando modo de datos simulados');
-            this.useMockData = true;
-            this.isConnected = true;
-            this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-            
-            // Simular evento de conexión
-            this._triggerEvent('connect', {
-              client_id: this.clientId,
-              user_id: 'mock-user',
-              timestamp: new Date().toISOString()
-            });
-            
-            resolve();
-          } else {
-            reject(error);
-          }
+          // Aquí ya no activamos mock data, simplemente reportamos el error.
+          // La reconexión se manejará en onclose si es apropiado.
+          reject(error);
         };
       } catch (error) {
         console.error('Error al conectar:', error);
-        
-        if (IS_DEV_MODE) {
-          console.log('🔶 Error al conectar en modo desarrollo, activando modo de datos simulados');
-          this.useMockData = true;
-          this.isConnected = true;
-          this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-          
-          // Simular evento de conexión
-          this._triggerEvent('connect', {
-            client_id: this.clientId,
-            user_id: 'mock-user',
-            timestamp: new Date().toISOString()
-          });
-          
-          resolve();
-        } else {
-          reject(error);
-        }
+        reject(error);
       }
     });
   }
   
   disconnect() {
-    if (this.useMockData) {
-      console.log('🔶 Modo de datos simulados: simulando desconexión');
-      this.isConnected = false;
-      
-      // Simular evento de desconexión
-      this._triggerEvent('disconnect', {
-        code: 1000,
-        reason: 'Closed by client',
-        timestamp: new Date().toISOString()
-      });
-      
-      return Promise.resolve();
-    }
-    
     return new Promise((resolve) => {
       if (this.socket && this.isConnected) {
         console.log('🔌 Cerrando conexión WebSocket...');
@@ -398,44 +240,19 @@ class WebSocketClient {
         timestamp: new Date().toISOString()
       });
       
-      // Activar modo de datos simulados en desarrollo
-      if (IS_DEV_MODE) {
-        console.log('🔶 Activando modo de datos simulados después de fallar reconexiones');
-        this.useMockData = true;
-        this.isConnected = true;
-        this.clientId = 'mock-client-' + Math.random().toString(36).substring(2, 15);
-        
-        // Simular evento de conexión
-        this._triggerEvent('connect', {
-          client_id: this.clientId,
-          user_id: 'mock-user',
-          timestamp: new Date().toISOString()
-        });
-        
-        // Iniciar heartbeats simulados
-        this._startMockHeartbeats();
-      }
+      // Aquí ya no activamos mock data.
+      // Si se desea algún comportamiento específico tras fallos persistentes,
+      // se podría añadir aquí, como notificar a la UI.
     }
   }
   
+  // _startMockHeartbeats ya no es necesario y puede ser eliminado si no hay otra lógica que lo use.
+  // Por ahora lo dejo por si hay referencias, pero idealmente se elimina.
   _startMockHeartbeats() {
-    // Limpiar intervalo existente
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-    
-    // Iniciar nuevo intervalo
-    this.heartbeatInterval = setInterval(() => {
-      const timestamp = new Date().toISOString();
-      this.lastHeartbeat = timestamp;
-      
-      // Disparar evento de heartbeat
-      this._triggerEvent('heartbeat', {
-        timestamp: timestamp
-      });
-      
-      console.log(`💓 Heartbeat simulado: ${timestamp}`);
-    }, 30000); // Cada 30 segundos
+    // Esta función estaba ligada al modo mock. Si se elimina el modo mock,
+    // esta función probablemente ya no tenga uso o necesite ser reevaluada.
+    // Por ahora, la dejamos vacía o con un log para indicar que no debería usarse.
+    console.warn('_startMockHeartbeats fue llamada, pero el modo mock está deshabilitado.');
   }
 
   on(event, callback) {
@@ -475,130 +292,7 @@ class WebSocketClient {
   request(resource, action, data = {}) {
     return new Promise(async (resolve, reject) => {
       try {
-        // Si estamos en modo de datos simulados, generar respuesta simulada
-        if (this.useMockData) {
-          console.log(`🔶 Modo de datos simulados: simulando solicitud ${resource}/${action}`);
-          
-          setTimeout(() => {
-            try {
-              let response;
-              
-              // Generar respuesta simulada según el recurso y acción
-              if (resource === 'users') {
-                if (action === 'get_all') {
-                  response = { users: MOCK_DATA.users, total: MOCK_DATA.users.length };
-                } else if (action === 'get_by_id') {
-                  const user = MOCK_DATA.users.find(u => u.id === data.user_id);
-                  if (!user) {
-                    throw new Error(`Usuario no encontrado: ${data.user_id}`);
-                  }
-                  response = { user };
-                }
-              } else if (resource === 'conversations') {
-                if (action === 'get_all') {
-                  let conversations = [...MOCK_DATA.conversations];
-                  if (data.user_id) {
-                    conversations = conversations.filter(c => c.created_by === data.user_id);
-                  }
-                  response = { conversations, total: conversations.length };
-                } else if (action === 'get_by_id') {
-                  const conversation = MOCK_DATA.conversations.find(c => c.id === data.conversation_id);
-                  if (!conversation) {
-                    throw new Error(`Conversación no encontrada: ${data.conversation_id}`);
-                  }
-                  response = { conversation };
-                } else if (action === 'create') {
-                  const newConversation = {
-                    id: 'conv-' + Date.now(),
-                    ...data.conversation,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    unread_count: 0
-                  };
-                  MOCK_DATA.conversations.push(newConversation);
-                  MOCK_DATA.messages[newConversation.id] = [];
-                  response = { conversation: newConversation };
-                }
-              } else if (resource === 'messages') {
-                if (action === 'get_by_conversation') {
-                  const messages = MOCK_DATA.messages[data.conversation_id] || [];
-                  response = { 
-                    messages,
-                    pagination: {
-                      limit: 50,
-                      offset: 0,
-                      total: messages.length
-                    }
-                  };
-                } else if (action === 'create') {
-                  const newMessage = {
-                    id: 'msg-' + Date.now(),
-                    ...data.message,
-                    created_at: new Date().toISOString(),
-                    read: false
-                  };
-                  
-                  if (!MOCK_DATA.messages[newMessage.conversation_id]) {
-                    MOCK_DATA.messages[newMessage.conversation_id] = [];
-                  }
-                  
-                  MOCK_DATA.messages[newMessage.conversation_id].push(newMessage);
-                  
-                  // Actualizar last_message en la conversación
-                  const conversation = MOCK_DATA.conversations.find(c => c.id === newMessage.conversation_id);
-                  if (conversation) {
-                    conversation.last_message = newMessage.content;
-                    conversation.updated_at = newMessage.created_at;
-                    
-                    // Incrementar unread_count si el mensaje es del usuario
-                    if (newMessage.role === 'user') {
-                      conversation.unread_count = (Number(conversation.unread_count) || 0) + 1;
-                    }
-                  }
-                  
-                  response = { message: newMessage };
-                  
-                  // Simular evento de nuevo mensaje
-                  setTimeout(() => {
-                    this._triggerEvent('new_message', {
-                      message: newMessage,
-                      conversation: conversation
-                    });
-                  }, 100);
-                } else if (action === 'update') {
-                  if (data.message_id === 'all') {
-                    // Marcar todos los mensajes como leídos
-                    const messages = MOCK_DATA.messages[data.conversation_id] || [];
-                    messages.forEach(msg => {
-                      msg.read = true;
-                    });
-                    
-                    // Actualizar unread_count en la conversación
-                    const conversation = MOCK_DATA.conversations.find(c => c.id === data.conversation_id);
-                    if (conversation) {
-                      conversation.unread_count = 0;
-                    }
-                    
-                    response = { success: true };
-                  }
-                }
-              }
-              
-              if (!response) {
-                throw new Error(`Acción no soportada en modo simulado: ${resource}/${action}`);
-              }
-              
-              resolve(response);
-            } catch (mockError) {
-              console.error('Error al generar respuesta simulada:', mockError);
-              reject(mockError);
-            }
-          }, 200);
-          
-          return;
-        }
-        
-        // Si no estamos en modo simulado, enviar solicitud real
+        // Siempre intentamos enviar una solicitud real
         if (!this.isConnected) {
           console.log('📡 WebSocket no conectado, intentando conectar antes de enviar solicitud...');
           await this.connect();
@@ -645,38 +339,22 @@ class WebSocketClient {
           console.error(`❌ Error al enviar solicitud ${resource}/${action}:`, sendError);
           
           // Intentar reconectar y reenviar
-          if (!IS_DEV_MODE) {
-            console.log('🔄 Intentando reconectar y reenviar solicitud...');
-            try {
-              await this.connect();
-              console.log('✅ Reconexión exitosa, reenviando solicitud...');
-              
-              // Reenviar solicitud
-              this.socket.send(JSON.stringify(request));
-            } catch (reconnectError) {
-              console.error('❌ Error al reconectar:', reconnectError);
-              reject(sendError);
-            }
-          } else {
-            console.log('🔶 Error al enviar en modo desarrollo, usando datos simulados');
-            this.useMockData = true;
+          // Ya no se diferencia IS_DEV_MODE para activar mockData
+          console.log('🔄 Intentando reconectar y reenviar solicitud...');
+          try {
+            await this.connect();
+            console.log('✅ Reconexión exitosa, reenviando solicitud...');
             
-            // Reintentar con datos simulados
-            this.request(resource, action, data).then(resolve).catch(reject);
+            // Reenviar solicitud
+            this.socket.send(JSON.stringify(request));
+          } catch (reconnectError) {
+            console.error('❌ Error al reconectar:', reconnectError);
+            reject(sendError); // Rechazar con el error de envío original si la reconexión falla
           }
         }
       } catch (error) {
         console.error('Error en request:', error);
-        
-        if (IS_DEV_MODE) {
-          console.log('🔶 Error en request en modo desarrollo, usando datos simulados');
-          this.useMockData = true;
-          
-          // Reintentar con datos simulados
-          this.request(resource, action, data).then(resolve).catch(reject);
-        } else {
-          reject(error);
-        }
+        reject(error); // Ya no hay fallback a mockData
       }
     });
   }
@@ -1053,27 +731,7 @@ export const toggleAgent = async (conversationId, enabled) => {
       }
     }
     
-    // Si estamos en modo de datos simulados, simular la respuesta
-    if (wsClient.useMockData) {
-      console.log(`🔶 Modo de datos simulados: simulando toggle agent para conversación ${conversationId}`);
-      
-      // Buscar la conversación en los datos simulados
-      const conversation = MOCK_DATA.conversations.find(c => c.id === conversationId);
-      if (conversation) {
-        // Actualizar el estado del agente
-        conversation.agent_enabled = enabled;
-        
-        return {
-          success: true,
-          conversation: {
-            ...conversation,
-            agent_enabled: enabled
-          }
-        };
-      } else {
-        throw new Error(`Conversación no encontrada: ${conversationId}`);
-      }
-    }
+    // Ya no hay modo de datos simulados aquí.
     
     // Usar WebSocket para actualizar la conversación
     console.log(`Actualizando estado del agente para conversación ${conversationId} a través de WebSocket...`);

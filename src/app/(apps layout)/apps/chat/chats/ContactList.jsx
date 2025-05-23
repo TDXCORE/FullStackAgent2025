@@ -177,82 +177,6 @@ const ContactList = ({ invitePeople }) => {
         
     }, [dispatch, states.chatState.contacts, states.chatState.wsConnected, states.chatState.conversations, sortConversations]);
     
-    // Escuchar eventos WebSocket para nuevos mensajes
-    useEffect(() => {
-        // Este efecto se ejecuta cuando hay un nuevo mensaje o cuando se actualiza una conversación
-        if (states.chatState.wsConnected) {
-            console.log("🔄 ContactList: WebSocket conectado, escuchando eventos de nuevos mensajes");
-            
-            // Configurar un intervalo para verificar nuevas conversaciones periódicamente
-            const checkInterval = setInterval(async () => {
-                try {
-                    console.log("🔍 ContactList: Verificando nuevas conversaciones...");
-                    
-                    // Forzar reconexión del WebSocket periódicamente para asegurar conexión fresca
-                    if (!wsClient.isConnected) {
-                        console.log('🔄 ContactList: WebSocket no conectado, intentando conectar...');
-                        try {
-                            await wsClient.connect();
-                            console.log('✅ ContactList: WebSocket conectado exitosamente');
-                        } catch (connectError) {
-                            console.error('❌ ContactList: Error al conectar WebSocket:', connectError);
-                        }
-                    }
-                    
-                    if (states.chatState.contacts && states.chatState.contacts.length > 0) {
-                        const firstContact = states.chatState.contacts[0];
-                        console.log(`🔍 ContactList: Verificando nuevas conversaciones para contacto: ${firstContact.name}`);
-                        
-                        const conversations = await getConversations(firstContact.id);
-                        if (conversations && Array.isArray(conversations) && conversations.length > 0) {
-                            console.log(`✅ ContactList: Se encontraron ${conversations.length} conversaciones`);
-                            
-                            // Verificar si hay cambios en las conversaciones
-                            const currentConvsIds = new Set(states.chatState.conversations.map(c => c.id));
-                            const newConversations = conversations.filter(c => !currentConvsIds.has(c.id));
-                            
-                            if (newConversations.length > 0) {
-                                console.log(`🆕 ContactList: Hay ${newConversations.length} conversaciones nuevas`);
-                                
-                                // Actualizar todas las conversaciones
-                                dispatch({ 
-                                    type: 'fetch_conversations_success', 
-                                    conversations: conversations 
-                                });
-                            } else {
-                                // Verificar si hay cambios en los mensajes no leídos o en el último mensaje
-                                const hasChanges = conversations.some(newConv => {
-                                    const existingConv = states.chatState.conversations.find(c => c.id === newConv.id);
-                                    if (!existingConv) return false;
-                                    
-                                    return (
-                                        Number(newConv.unread_count || 0) !== Number(existingConv.unread_count || 0) ||
-                                        newConv.last_message !== existingConv.last_message
-                                    );
-                                });
-                                
-                                if (hasChanges) {
-                                    console.log('🔄 ContactList: Hay cambios en mensajes no leídos o últimos mensajes');
-                                    dispatch({ 
-                                        type: 'fetch_conversations_success', 
-                                        conversations: conversations 
-                                    });
-                                }
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('❌ ContactList: Error al verificar nuevas conversaciones:', error);
-                }
-            }, 10000); // Verificar cada 10 segundos
-            
-            // Limpiar intervalo al desmontar
-            return () => {
-                clearInterval(checkInterval);
-            };
-        }
-    }, [states.chatState.wsConnected, states.chatState.contacts, states.chatState.conversations, dispatch]);
-    
     // Actualizar la lista de contactos cuando cambian las conversaciones, los contactos o llegan nuevos mensajes
     useEffect(() => {
         console.log("🔄 Actualizando lista de contactos basada en conversaciones y contactos...");
@@ -463,14 +387,6 @@ const ContactList = ({ invitePeople }) => {
         setList(updatedList);
     }
     
-    // Function to toggle mock data mode
-    const toggleMockData = () => {
-        const currentMode = localStorage.getItem('USE_MOCK_DATA') === 'true';
-        localStorage.setItem('USE_MOCK_DATA', (!currentMode).toString());
-        alert(`Switched to ${!currentMode ? 'Mock Data' : 'Real Data'} mode. The page will reload.`);
-        window.location.reload();
-    }
-
     return (
         <>
             <div className="chatapp-aside">
@@ -478,11 +394,6 @@ const ContactList = ({ invitePeople }) => {
                     <Dropdown>
                         <Dropdown.Toggle as="a" className="chatapp-title link-dark" href="#" >
                             <h1>Chat</h1>
-                            {typeof window !== 'undefined' && window.localStorage.getItem('USE_MOCK_DATA') === 'true' && (
-                                <Badge bg="warning" className="ms-2" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>
-                                    MOCK DATA
-                                </Badge>
-                            )}
                         </Dropdown.Toggle>
                         <Dropdown.Menu>
                             <Dropdown.Item as={Link} href="chats">
@@ -561,13 +472,6 @@ const ContactList = ({ invitePeople }) => {
                             <span className="icon">
                                 <span className="feather-icon">
                                     <Icons.Plus />
-                                </span>
-                            </span>
-                        </a>
-                        <a className="btn btn-icon btn-rounded btn-warning" onClick={toggleMockData} title="Toggle between mock and real data">
-                            <span className="icon">
-                                <span className="feather-icon">
-                                    <Icons.Database />
                                 </span>
                             </span>
                         </a>
