@@ -173,15 +173,44 @@ const ContactList = ({ invitePeople }) => {
         console.log("🔄 (useMemo) Recalculando lista de contactos procesada y ordenada...");
         const { conversations, contacts } = states.chatState;
 
+        // Debug: Mostrar datos disponibles
+        console.log("📊 DEBUG - Datos disponibles:");
+        console.log(`📊 Contactos: ${contacts?.length || 0}`, contacts?.slice(0, 2));
+        console.log(`📊 Conversaciones: ${conversations?.length || 0}`, conversations?.slice(0, 2));
+
         if (conversations && conversations.length > 0 && contacts && contacts.length > 0) {
+            console.log("🔗 Iniciando vinculación de contactos con conversaciones...");
             let contactsWithConversations = [];
+            
+            // Crear un mapa de contactos por teléfono para búsqueda más eficiente
+            const contactsByPhone = new Map();
+            contacts.forEach(contact => {
+                // Intentar extraer el teléfono del contacto
+                const phone = contact.phone || contact.id; // Usar phone si existe, sino usar id
+                contactsByPhone.set(phone, contact);
+                console.log(`📞 Mapeando contacto: ${contact.name} -> ${phone}`);
+            });
+
             conversations.forEach(conv => {
-                const existingContact = contacts.find(contact => 
-                    contact.id === conv.external_id || 
-                    (conv.external_id && typeof conv.external_id.includes === 'function' && conv.external_id.includes(contact.id))
-                );
+                console.log(`🔍 Procesando conversación: ${conv.id.substring(0, 8)}, external_id: ${conv.external_id}`);
+                
+                // Buscar contacto por external_id (que debería ser el teléfono)
+                let existingContact = contactsByPhone.get(conv.external_id);
+                
+                // Si no se encuentra, intentar buscar por coincidencia parcial
+                if (!existingContact) {
+                    console.log(`🔍 No se encontró contacto directo para ${conv.external_id}, buscando coincidencias...`);
+                    existingContact = contacts.find(contact => {
+                        // Buscar por ID, teléfono, o coincidencia parcial
+                        return contact.id === conv.external_id || 
+                               contact.phone === conv.external_id ||
+                               (contact.phone && conv.external_id && contact.phone.includes(conv.external_id)) ||
+                               (contact.phone && conv.external_id && conv.external_id.includes(contact.phone));
+                    });
+                }
                 
                 if (existingContact) {
+                    console.log(`✅ Contacto encontrado: ${existingContact.name} vinculado con conversación ${conv.id.substring(0, 8)}`);
                     contactsWithConversations.push({
                         ...existingContact,
                         unread: Number(conv.unread_count || 0),
@@ -191,6 +220,7 @@ const ContactList = ({ invitePeople }) => {
                         updated_at: conv.updated_at
                     });
                 } else {
+                    console.log(`⚠️ No se encontró contacto para conversación ${conv.id.substring(0, 8)}, creando contacto virtual`);
                     contactsWithConversations.push({
                         id: conv.external_id || `virtual-${conv.id}`,
                         name: `Usuario ${conv.external_id || conv.id.substring(0, 8)}`,
@@ -207,6 +237,26 @@ const ContactList = ({ invitePeople }) => {
                 }
             });
             
+            // Agregar contactos que no tienen conversaciones
+            contacts.forEach(contact => {
+                const hasConversation = contactsWithConversations.some(c => c.id === contact.id);
+                if (!hasConversation) {
+                    console.log(`📝 Agregando contacto sin conversación: ${contact.name}`);
+                    contactsWithConversations.push({
+                        ...contact,
+                        unread: 0,
+                        lastChat: "Click to start conversation",
+                        time: new Date(contact.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        conversationId: null, // Sin conversación
+                        updated_at: contact.created_at || new Date(0).toISOString()
+                    });
+                }
+            });
+            
+            console.log(`📋 Total de contactos procesados: ${contactsWithConversations.length}`);
+            console.log(`📋 Contactos con conversación: ${contactsWithConversations.filter(c => c.conversationId).length}`);
+            console.log(`📋 Contactos sin conversación: ${contactsWithConversations.filter(c => !c.conversationId).length}`);
+            
             return [...contactsWithConversations].sort((a, b) => {
                 if ((a.unread || 0) !== (b.unread || 0)) {
                     return (b.unread || 0) - (a.unread || 0);
@@ -219,16 +269,19 @@ const ContactList = ({ invitePeople }) => {
                 return 0;
             });
         } else if (contacts && contacts.length > 0) {
+            console.log("📝 Solo hay contactos, sin conversaciones");
             return contacts.map(c => ({ 
                 ...c, 
                 unread: 0, 
                 lastChat: "Click to start conversation", 
                 time: new Date(c.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                conversationId: null, // Sin conversación
                 updated_at: c.created_at || new Date(0).toISOString() 
             })).sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at));
         }
+        console.log("📝 No hay datos para procesar");
         return [];
-    }, [states.chatState.conversations, states.chatState.contacts, sortConversations]);
+    }, [states.chatState.conversations, states.chatState.contacts]);
 
     useEffect(() => {
         // Solo actualizar si processedAndSortedList tiene contenido válido o si necesitamos limpiar la lista
@@ -311,8 +364,47 @@ const ContactList = ({ invitePeople }) => {
                 }
             }
         } else {
-            console.warn(`⚠️ No conversationId found for contact ${contactData.name}`);
-            // TODO: Implement conversation creation if needed
+            console.warn(`⚠️ No conversationId found for contact ${contactData.name}, intentando crear conversación...`);
+            
+            // Intentar crear una nueva conversación para este contacto
+            try {
+                // Usar el teléfono del contacto como external_id
+                const externalId = contactData.phone || contactData.id;
+                console.log(`🔄 Creando nueva conversación para ${contactData.name} con external_id: ${externalId}`);
+                
+                // Crear conversación usando el WebSocket
+                const newConversationData = {
+                    user_id: contactData.id,
+                    external_id: externalId,
+                    platform: 'web'
+                };
+                
+                const newConversation = await wsClient.createConversation(newConversationData);
+                
+                if (newConversation && newConversation.conversation) {
+                    console.log(`✅ Nueva conversación creada: ${newConversation.conversation.id}`);
+                    
+                    // Agregar la nueva conversación al estado global
+                    dispatch({
+                        type: "fetch_conversations_success",
+                        conversations: [...(states.chatState.conversations || []), newConversation.conversation]
+                    });
+                    
+                    // Establecer como conversación actual
+                    dispatch({ 
+                        type: "set_current_conversation", 
+                        conversationId: newConversation.conversation.id 
+                    });
+                    
+                    console.log(`🎯 Nueva conversación establecida como actual: ${newConversation.conversation.id}`);
+                } else {
+                    console.error("❌ No se pudo crear la conversación - respuesta inválida");
+                }
+            } catch (error) {
+                console.error("❌ Error al crear nueva conversación:", error);
+                // Fallback: establecer el usuario sin conversación
+                console.log("🔄 Fallback: estableciendo usuario sin conversación activa");
+            }
         }
 
         // Handle mobile view
