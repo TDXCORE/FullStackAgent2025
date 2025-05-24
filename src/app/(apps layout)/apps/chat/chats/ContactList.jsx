@@ -114,13 +114,29 @@ const ContactList = ({ invitePeople }) => {
                     // This should be a general endpoint that returns all conversations
                     let allConversations = [];
                     
-                    // Try to get conversations for each contact, but don't filter the global state
+                    // Try to get conversations for each contact using phone number (external_id)
                     const usersToFetch = states.chatState.contacts;
                     for (const contact of usersToFetch) {
                         try {
-                            const userConversations = await getConversations(contact.id);
-                            if (userConversations && Array.isArray(userConversations)) {
-                                allConversations = [...allConversations, ...userConversations];
+                            // Extraer el teléfono del nombre del contacto si no está en contact.phone
+                            let phoneNumber = contact.phone;
+                            if (!phoneNumber && contact.name && contact.name.includes('Usuario ')) {
+                                // Extraer número del nombre "Usuario 573005010715"
+                                phoneNumber = contact.name.replace('Usuario ', '');
+                            }
+                            
+                            console.log(`🔍 Buscando conversaciones para ${contact.name} con teléfono: ${phoneNumber}`);
+                            
+                            if (phoneNumber) {
+                                const userConversations = await getConversations(phoneNumber);
+                                if (userConversations && Array.isArray(userConversations)) {
+                                    console.log(`✅ Encontradas ${userConversations.length} conversaciones para ${phoneNumber}`);
+                                    allConversations = [...allConversations, ...userConversations];
+                                } else {
+                                    console.log(`⚠️ No se encontraron conversaciones para ${phoneNumber}`);
+                                }
+                            } else {
+                                console.log(`⚠️ No se pudo extraer teléfono para ${contact.name}`);
                             }
                         } catch (error) {
                             console.error(`Error al obtener conversaciones para ${contact.name}:`, error);
